@@ -1,1 +1,270 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>筆算ゲーム</title>
+  <style>
+    :root{
+      --pad: 18px;
+      --radius: 18px;
+      --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+    }
+    html,body{height:100%;margin:0;background:#0b0b0f;color:#fff;font-family:var(--font);}
+    .wrap{max-width:980px;margin:0 auto;padding:var(--pad);display:flex;flex-direction:column;gap:14px;}
+    .top{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:var(--radius);padding:14px;box-shadow:0 10px 24px rgba(0,0,0,.35);}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    select,button,input{
+      font-size:18px;border-radius:14px;border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.08);color:#fff;padding:10px 12px;
+    }
+    button{cursor:pointer;user-select:none}
+    button:active{transform:scale(.98)}
+    .pill{padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-size:14px}
+    .big{
+      display:flex;align-items:center;justify-content:center;
+      padding:22px;
+      min-height:280px;
+    }
+    /* 筆算表示 */
+    .calc{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Noto Sans Mono", monospace;
+      font-size:44px; line-height:1.1;
+      text-align:right;
+      padding:16px 18px;
+      border-radius:18px;
+      background:rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.10);
+      min-width:380px;
+    }
+    .calc .line{border-top:3px solid rgba(255,255,255,.70); margin-top:8px; padding-top:10px}
+    .opline{display:flex;gap:14px;justify-content:flex-end;align-items:baseline}
+    .op{width:1.2em;text-align:center;opacity:.95}
+    .num{letter-spacing:.04em}
+    .sub{font-size:18px;opacity:.85;margin-top:10px;text-align:left}
+    .ansrow{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+    .ans{font-size:26px; width:240px; text-align:center}
+    .msg{min-height:28px;text-align:center;font-size:18px;opacity:.95}
+    .good{color:#9ef6a8}
+    .bad{color:#ffb0b0}
+    .small{font-size:14px;opacity:.8}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="row">
+        <div class="pill">筆算ゲーム</div>
+        <div class="pill" id="scorePill">スコア: 0 / 0</div>
+        <div class="pill" id="streakPill">連続: 0</div>
+      </div>
+      <div class="row">
+        <label class="small">種目</label>
+        <select id="mode">
+          <option value="add">たし算</option>
+          <option value="sub">ひき算</option>
+          <option value="mul">かけ算</option>
+          <option value="mix" selected>ミックス</option>
+        </select>
 
+        <label class="small">桁</label>
+        <select id="digits">
+          <option value="2">2桁</option>
+          <option value="3" selected>3桁</option>
+          <option value="4">4桁</option>
+        </select>
+
+        <button id="newBtn">つぎ</button>
+        <button id="resetBtn">リセット</button>
+      </div>
+    </div>
+
+    <div class="card big">
+      <div class="calc" id="calc">
+        <div class="opline"><span class="op" id="op">+</span><span class="num" id="b">---</span></div>
+        <div class="opline"><span class="op">&nbsp;</span><span class="num" id="a">---</span></div>
+        <div class="line"><span class="num" id="hint"> </span></div>
+        <div class="sub" id="subHint"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ansrow">
+        <input id="ans" class="ans" inputmode="numeric" placeholder="答えをいれてな" />
+        <button id="okBtn">OK</button>
+      </div>
+      <div class="msg" id="msg"></div>
+      <div class="small" style="text-align:center;margin-top:6px;">
+        ヒント：Enterで判定／正解したら自動で次の問題へ
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id)=>document.getElementById(id);
+
+  const elMode = $('mode');
+  const elDigits = $('digits');
+  const elNew = $('newBtn');
+  const elReset = $('resetBtn');
+  const elOk = $('okBtn');
+  const elAns = $('ans');
+  const elA = $('a');
+  const elB = $('b');
+  const elOp = $('op');
+  const elMsg = $('msg');
+  const elScore = $('scorePill');
+  const elStreak = $('streakPill');
+  const elSubHint = $('subHint');
+
+  let state = {
+    a: 0, b: 0, op: '+',
+    correct: 0,
+    total: 0,
+    streak: 0,
+    lastWasCorrect: true,
+  };
+
+  // --- SFX（簡単なピッ） ---
+  let ac = null;
+  function beep(freq=880, ms=70, vol=0.08){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!ac) ac = new AC();
+    const t0 = ac.currentTime;
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms/1000);
+    o.connect(g).connect(ac.destination);
+    o.start(t0);
+    o.stop(t0 + ms/1000 + 0.02);
+  }
+
+  function randInt(min, max){
+    return Math.floor(Math.random()*(max-min+1))+min;
+  }
+
+  function pow10(n){ return Math.pow(10, n); }
+
+  function pickOp(){
+    const m = elMode.value;
+    if (m === 'add') return '+';
+    if (m === 'sub') return '−';
+    if (m === 'mul') return '×';
+    // mix
+    const ops = ['+','−','×'];
+    return ops[randInt(0, ops.length-1)];
+  }
+
+  function genProblem(){
+    const d = Number(elDigits.value);
+    const min = pow10(d-1);
+    const max = pow10(d)-1;
+
+    const op = pickOp();
+    let a = randInt(min, max);
+    let b = randInt(min, max);
+
+    // 引き算は負にならんように
+    if (op === '−' && b > a) [a,b] = [b,a];
+
+    // かけ算は重すぎ防止：桁数を少し抑える
+    if (op === '×'){
+      // aはd桁、bはd-1桁くらいに（小学生向け）
+      const minB = pow10(Math.max(1, d-2));
+      const maxB = pow10(Math.max(1, d-1)) - 1;
+      b = randInt(minB, maxB);
+    }
+
+    state.a = a;
+    state.b = b;
+    state.op = op;
+
+    render();
+  }
+
+  function correctAnswer(){
+    const {a,b,op} = state;
+    if (op === '+') return a + b;
+    if (op === '−') return a - b;
+    if (op === '×') return a * b;
+    return NaN;
+  }
+
+  function render(){
+    elA.textContent = String(state.a);
+    elB.textContent = String(state.b);
+    elOp.textContent = state.op;
+
+    elMsg.textContent = '';
+    elMsg.className = 'msg';
+    elAns.value = '';
+    elAns.focus();
+
+    // サブヒント（ちょい遊び）
+    if (state.op === '×'){
+      elSubHint.textContent = '（コツ：下の数を分解して足すと早いで）';
+    } else if (state.op === '−'){
+      elSubHint.textContent = '（コツ：くり下がりに注意や）';
+    } else {
+      elSubHint.textContent = '（コツ：くり上がりに注意や）';
+    }
+
+    elScore.textContent = `スコア: ${state.correct} / ${state.total}`;
+    elStreak.textContent = `連続: ${state.streak}`;
+  }
+
+  function judge(){
+    const user = String(elAns.value || '').trim().replace(/[, ]/g,'');
+    if (!user) return;
+
+    const ans = correctAnswer();
+    const ok = Number(user) === ans;
+
+    state.total += 1;
+
+    if (ok){
+      state.correct += 1;
+      state.streak += 1;
+      elMsg.textContent = `✅ せいかい！ ${ans}`;
+      elMsg.className = 'msg good';
+      beep(880, 55); setTimeout(()=>beep(1046, 80), 70);
+      renderScoreOnly();
+      setTimeout(genProblem, 650);
+    } else {
+      state.streak = 0;
+      elMsg.textContent = `❌ ちがうで。正解は ${ans}`;
+      elMsg.className = 'msg bad';
+      beep(180, 130);
+      renderScoreOnly();
+    }
+  }
+
+  function renderScoreOnly(){
+    elScore.textContent = `スコア: ${state.correct} / ${state.total}`;
+    elStreak.textContent = `連続: ${state.streak}`;
+  }
+
+  // events
+  elNew.addEventListener('click', ()=>{ beep(660, 40, 0.06); genProblem(); });
+  elReset.addEventListener('click', ()=>{
+    state.correct = 0; state.total = 0; state.streak = 0;
+    beep(440, 60, 0.06);
+    genProblem();
+  });
+  elOk.addEventListener('click', judge);
+  elAns.addEventListener('keydown', (e)=>{
+    if (e.key === 'Enter') judge();
+  });
+
+  // boot
+  genProblem();
+})();
+</script>
+</body>
+</html>
