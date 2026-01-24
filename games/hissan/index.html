@@ -138,19 +138,28 @@
     </div>
 
     <div class="card panel">
+      <!-- ★ 入力表示を先に -->
+      <div class="answerBox topAnswer">
+        <div class="ansDisplay" id="ansDisplay"></div>
+        <div class="msg" id="msg"></div>
+      </div>
+      <!-- ★ 問題 -->
       <div class="big">
         <div class="calc">
-          <div class="opline"><span class="op">&nbsp;</span><span class="num" id="a">---</span></div>
-          <div class="opline"><span class="op" id="op">+</span><span class="num" id="b">---</span></div>
+          <div class="opline">
+            <span class="op">&nbsp;</span>
+            <span class="num" id="a">---</span>
+          </div>
+          <div class="opline">
+            <span class="op" id="op">+</span>
+            <span class="num" id="b">---</span>
+          </div>
           <div class="line"></div>
           <div class="sub" id="subHint"></div>
         </div>
       </div>
 
       <div class="answerBox">
-        <div class="ansDisplay" id="ansDisplay"></div>
-        <div class="msg" id="msg"></div>
-
         <div class="pad" id="pad">
           <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
           <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
