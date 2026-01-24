@@ -34,7 +34,20 @@
     button{cursor:pointer;user-select:none}
     button:active{transform:scale(.98)}
     .pill{padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-size:14px}
-    .big{display:flex;align-items:center;justify-content:center;padding:18px;min-height:240px;}
+
+    /* 問題ボックス */
+    .big {
+      width: 100%;
+      max-width: 520px;   /* ← 問題の見た目に合う値に */
+    }
+    
+    /* アンサーボックスを問題と同幅に */
+    .answerUnder {
+      width: 100%;
+      max-width: 520px;   /* ← big と必ず同じ値 */
+      align-self: flex-start;
+      margin-top: 10px;
+    }
     .calc{
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Noto Sans Mono", monospace;
       font-size:44px; line-height:1.12;
@@ -168,11 +181,6 @@
     <div class="card panel">
       <!-- 左エリア：入力表示＋問題 -->
       <div class="leftCol">
-        <div class="answerBox topAnswer">
-          <div class="ansDisplay" id="ansDisplay"></div>
-          <div class="msg" id="msg"></div>
-        </div>
-    
         <div class="big">
           <div class="calc">
             <div class="opline">
@@ -186,6 +194,11 @@
             <div class="line"></div>
             <div class="sub" id="subHint"></div>
           </div>
+        </div>
+        <!-- ★ アンサーボックス（問題の下） -->
+        <div class="answerBox answerUnder">
+          <div class="ansDisplay" id="ansDisplay"></div>
+          <div class="msg" id="msg"></div>
         </div>
       </div>
     
