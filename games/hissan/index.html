@@ -56,11 +56,36 @@
       min-width: 4ch;
     }
     .sub{font-size:16px;opacity:.8;margin-top:10px;text-align:left}
-    .panel{display:grid;grid-template-columns:1fr 360px;gap:14px;align-items:stretch}
-    @media (max-width: 900px){
-      .panel{grid-template-columns:1fr;}
-      .calc{min-width:unset;width:100%}
+    
+    /* 2カラム：左（表示）／右（キー） */
+    .panel{
+      display: grid;
+      grid-template-columns: 1fr 380px; /* 右はキー幅固定 */
+      gap: 14px;
+      align-items: stretch;
     }
+    
+    /* 左は縦積み */
+    .leftCol{
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+    
+    /* 右はキーを上寄せ */
+    .rightCol{
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    
+    /* 画面が狭い時は縦並びに戻す */
+    @media (max-width: 900px){
+      .panel{ grid-template-columns: 1fr; }
+      .rightCol{ justify-content: stretch; }
+    }
+
     .topAnswer {
       margin-top: 6px;
       margin-bottom: 6px;
@@ -141,13 +166,14 @@
     </div>
 
     <div class="card panel">
-        <!-- ★ 入力表示を先に -->
+      <!-- 左エリア：入力表示＋問題 -->
+      <div class="leftCol">
         <div class="answerBox topAnswer">
           <div class="ansDisplay" id="ansDisplay"></div>
           <div class="msg" id="msg"></div>
         </div>
+    
         <div class="big">
-        <!-- ★ 問題 -->     
           <div class="calc">
             <div class="opline">
               <span class="op">&nbsp;</span>
@@ -161,18 +187,24 @@
             <div class="sub" id="subHint"></div>
           </div>
         </div>
-      <div class="answerBox">
-        <div class="pad" id="pad">
-          <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
-          <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
-          <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
-          <button class="wide" data-k="0">0</button><button data-k="del">⌫</button>
-          <button class="wide ok" data-k="ok">OK</button><button data-k="clr">C</button>
-        </div>
-
-        <div class="small">ヒント：OKで判定／正解なら自動で次へ</div>
       </div>
+    
+      <!-- 右エリア：数字キー -->
+      <div class="rightCol">
+        <div class="answerBox">
+          <div class="pad" id="pad">
+            <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+            <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+            <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+            <button class="wide" data-k="0">0</button><button data-k="del">⌫</button>
+            <button class="wide ok" data-k="ok">OK</button><button data-k="clr">C</button>
+          </div>
+          <div class="small">ヒント：OKで判定／正解なら自動で次へ</div>
+        </div>
+      </div>
+    
     </div>
+    
   </div>
 
 <script>
