@@ -19,6 +19,14 @@
     .top{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
     .card{background:var(--card-bg);border:1px solid var(--card-bd);border-radius:var(--radius);padding:14px;box-shadow:0 10px 24px rgba(0,0,0,.35);}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    select {
+      color: #111;              /* プルダウン閉じてる時 */
+      background: #fff;         /* 念のため */
+    }
+    select option {
+      color: #111;              /* 開いた中身 */
+      background: #fff;
+    }
     select,button{
       font-size:18px;border-radius:14px;border:1px solid var(--btn-bd);
       background:rgba(255,255,255,.08);color:#fff;padding:10px 12px;
@@ -39,8 +47,14 @@
     }
     .calc .line{border-top:3px solid rgba(255,255,255,.70); margin-top:8px; padding-top:10px}
     .opline{display:flex;gap:14px;justify-content:flex-end;align-items:baseline}
-    .op{width:1.2em;text-align:center;opacity:.95}
-    .num{letter-spacing:.04em}
+    .op {
+      width: 1.4em;
+      text-align: center;
+      font-weight: 700;
+    }
+    .num {
+      min-width: 4ch;
+    }
     .sub{font-size:16px;opacity:.8;margin-top:10px;text-align:left}
     .panel{display:grid;grid-template-columns:1fr 360px;gap:14px;align-items:stretch}
     @media (max-width: 900px){
@@ -126,8 +140,8 @@
     <div class="card panel">
       <div class="big">
         <div class="calc">
-          <div class="opline"><span class="op" id="op">+</span><span class="num" id="b">---</span></div>
           <div class="opline"><span class="op">&nbsp;</span><span class="num" id="a">---</span></div>
+          <div class="opline"><span class="op" id="op">+</span><span class="num" id="b">---</span></div>
           <div class="line"></div>
           <div class="sub" id="subHint"></div>
         </div>
