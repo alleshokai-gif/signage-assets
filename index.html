@@ -1,4 +1,590 @@
 <!doctype html>
-<html><body style="background:#000;color:#fff;font-family:sans-serif">
-signage-assets OK
-</body></html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Signage Portal</title>
+  <style>
+    :root{
+      --menu-h: 150px;            /* アイコンでかめ */
+      --menu-gap: 22px;
+      --menu-pad: 18px;
+      --menu-radius: 26px;
+      --menu-bg: rgba(0,0,0,.22);
+      --menu-border: rgba(255,255,255,.20);
+
+      --icon-size: 108px;         /* ← ここで大きさ調整 */
+      --icon-ring: rgba(255,255,255,.35);
+      --icon-ring-active: rgba(255,255,255,.75);
+
+      --shadow: 0 10px 24px rgba(0,0,0,.45);
+    }
+
+    html, body { height:100%; margin:0; background:#000; overflow:hidden; }
+
+    /* iframeは全画面固定（Lookerは常にフル） */
+    .view {
+      position:absolute; inset:0;
+      width:100vw; height:100vh;
+      border:0;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity 180ms linear;
+      background:#000;
+    }
+    .view.active { opacity:1; pointer-events:auto; }
+
+    #topMask{
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 6px;          /* まず6pxで。消えたら3pxに下げる */
+      background: #000;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .rtClock{
+      position: fixed;
+      top: 18px;
+      left: 0; right: 0;
+      display: none;
+      z-index: 80;
+      pointer-events: none;
+      text-align: center;
+      color: rgba(255,255,255,.92);
+      text-shadow: 0 6px 18px rgba(0,0,0,.55);
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+
+    /* 日付：1.5倍 */
+    .rtDate{
+      font-size: 84px;      /* ←ここが日付サイズ */
+      font-weight: 500;
+    }
+
+    /* 曜日：今のサイズ感に合わせる（小さめ固定） */
+    .rtDow{
+      font-size: 56px;      /* ←（金）のサイズ */
+      margin: 0 18px;
+      font-weight: 500;
+    }
+
+    /* 時刻：1.5倍 */
+    .rtTime{
+      display: inline-flex;
+      align-items: flex-start;
+    }
+
+    .rtHM{
+      font-size: 84px;      /* ←ここが時刻(HH:MM)サイズ */
+      font-weight: 500;
+    }
+
+    /* 秒：右下に小さめ */
+    .rtSec{
+      font-size: 42px;      /* ←時刻の半分くらい */
+      margin-left: 10px;
+      margin-top: 34px;     /* ←下げ具合（好みで微調整） */
+      opacity: .92;
+      letter-spacing: .06em;
+    }
+
+    /* メニュー：下に重ねる（画面分割しない） */
+    #menuWrap {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      height: var(--menu-h);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index: 50;
+      pointer-events: auto;   /* ✅ これにする */
+    }
+
+    /* メニューパネル（半透明の台座） */
+    #menu{
+      pointer-events: auto;
+      display:flex;
+      gap: var(--menu-gap);
+      padding: 0;                 /* 台座いらん */
+      background: transparent;    /* 透明 */
+      border: 0;                  /* 枠なし */
+      border-radius: 0;
+      box-shadow: none;           /* 影なし */
+      backdrop-filter: none;      /* ぼかしなし */
+    }
+
+    /* ボタン（ファンシーアイコン想定） */
+    .mBtn{
+      pointer-events: auto;       /* ←ここだけクリック有効 */
+      width: var(--icon-size);
+      height: var(--icon-size);
+      border: 0;
+      padding: 0;
+      border-radius: 999px;
+      background: transparent;
+      cursor: pointer;
+      position: relative;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+      transform: translateZ(0);
+    }
+
+    /* アイコン画像（PNG/WebP/SVG） */
+    .mBtn img{
+      width: 100%;
+      height: 100%;
+      display:block;
+      border-radius: 999px;
+      box-shadow: 0 8px 18px rgba(0,0,0,.35);
+    }
+
+    /* 輪っか（アクティブが分かりやすい） */
+    .mBtn::after{
+      content:'';
+      position:absolute; inset:-6px;
+      border-radius:999px;
+      border: 3px solid var(--icon-ring);
+      opacity: .9;
+      transition: 140ms;
+    }
+    .mBtn.active::after{
+      border-color: var(--icon-ring-active);
+      box-shadow: 0 0 0 6px rgba(255,255,255,.10);
+    }
+
+    /* 押したときの気持ちよさ */
+    .mBtn:active { transform: scale(0.96); }
+
+    /* 左上デバッグ（任意） */
+    #toast{
+      position: fixed;
+      left: 10px; top: 10px;
+      z-index: 60;
+      font-size: 12px;
+      color: rgba(255,255,255,.85);
+      background: transparent;  /* ← 黒箱消す */
+      border: 0;                /* ← 枠消す */
+      padding: 0;               /* ← 余白消す */
+      border-radius: 0;
+      pointer-events:none;
+    }
+
+    /* 画面が小さいときは自動で縮める（保険） */
+    @media (max-width: 900px){
+      :root{ --icon-size: 92px; --menu-h: 135px; --menu-gap: 16px; }
+    }
+    @media (max-width: 720px){
+      :root{ --icon-size: 82px; --menu-h: 125px; --menu-gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="topMask"></div>
+
+  <div id="rtClock" class="rtClock">
+    <span id="rtDate" class="rtDate"></span>
+    <span id="rtDow"  class="rtDow"></span>
+    <span id="rtTime" class="rtTime">
+      <span id="rtHM" class="rtHM"></span>
+      <span id="rtSec" class="rtSec"></span>
+    </span>
+  </div>
+
+  <iframe id="view" class="view active" src="about:blank"></iframe>
+
+
+  <!-- デバッグ -->
+  <div id="toast">boot...</div>
+
+  <!-- メニュー（下部に重ね） -->
+  <div id="menuWrap">
+    <div id="menu" aria-label="menu">
+      <button class="mBtn" data-page="home"   aria-label="home">
+        <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_HOME.png" alt="home">
+      </button>
+      <button class="mBtn" data-page="finance" aria-label="finance">
+        <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_FINANCE.png" alt="finance">
+      </button>
+      <button class="mBtn" data-page="temp" aria-label="temp">
+        <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_TEMP.png" alt="temp">
+      </button>
+      <button class="mBtn" data-page="school" aria-label="school">
+        <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_SCHOOL.png" alt="school">
+      </button>
+      <button class="mBtn" data-page="game"  aria-label="game">
+        <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_GAME.png" alt="game">
+      </button>
+    </div>
+  </div>
+
+<script>
+(() => {
+
+  try {
+    // ====== 兄弟：ここだけ差し替えたらOK ======
+    // ※ Lookerの「埋め込みURL」推奨（/embed/reporting/...）
+    const PAGES = {
+      home:    { url: 'https://lookerstudio.google.com/embed/reporting/c3341ade-526b-4ef1-8f77-e04e885ccf81/page/p_7ie80j9qzd',    auto: true  },
+      temp:    { url: 'https://lookerstudio.google.com/embed/reporting/a9247f37-fc30-425b-a648-1c360e725914/page/p_2o3y60glyd',    auto: true  },
+      school:  { url: 'https://lookerstudio.google.com/embed/reporting/e56ad71b-8c4c-4a59-88fa-99e773c8809a/page/p_20w8aknpyd',  auto: true  },
+      finance: { url: 'https://lookerstudio.google.com/embed/reporting/27c09c89-3b08-46f8-bc49-db0d6e60c3fe/page/p_kbyrml84yd', auto: false }, // 手動専用
+      game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan',           auto: false }, // 手動専用
+    };
+    // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxImsH4sWBlEbYaiEl4X7mUmAsuzr3j8hRJeg7Hlq6fXSQRh79XCGB8PoX7arfbPrnbXQ/exec';
+    const AUTO_ORDER = Object.keys(PAGES).filter(k => PAGES[k].auto);
+    const AUTO_SEC = 60;              // 自動巡回 秒
+    const IDLE_HOME_SEC = 300;        // 放置でホーム復帰（任意）
+    const IDLE_FINANCE_SEC = 180;      // 家計は短め（任意）
+    const IDLE_GAME_SEC = 300;        // ゲームは長め（任意）
+    const BOOT_HOLD_SEC = 120;     // 起動直後だけ長めに見せる
+    const DEBUG = false;
+    const VOICE_BASE =  'https://alleshokai-gif.github.io/signage-assets/assets/voice/';
+
+    // ====== DOM ======
+    const view = document.getElementById('view');
+    const toast = document.getElementById('toast');
+    const menu = document.getElementById('menu');
+
+
+    const rtClock = document.getElementById('rtClock');
+
+    const rtDate = document.getElementById('rtDate');
+    const rtDow  = document.getElementById('rtDow');
+    const rtHM   = document.getElementById('rtHM');
+    const rtSec  = document.getElementById('rtSec');
+
+    function pad2(n){ return String(n).padStart(2,'0'); }
+    const DOW = ['日','月','火','水','木','金','土'];
+
+    function updateRtClock(){
+      const d = new Date();
+      rtDate.textContent = `${d.getMonth()+1}/${d.getDate()}`;
+      rtDow.textContent  = `（${DOW[d.getDay()]}）`;
+      rtHM.textContent   = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+      rtSec.textContent  = pad2(d.getSeconds()); // ←「:」なしで右下に出す
+    }
+
+    setInterval(updateRtClock, 250); // 1秒でもOK。ぬるぬるしたいなら250ms
+    updateRtClock();
+
+    toast.textContent = '';   // ← これ追加
+    // ====== state ======
+    let currentPage = null;
+    let navToken = 0;
+
+    let autoTimer = null;
+    let autoIndex = 0;
+    let autoEnabled = true;
+
+    let idleTimer = null;
+
+    // ===== TTS (Zundamon) =====
+    let _playing = false;
+
+    async function playQueue(keys){
+      if (_playing) return;
+      _playing = true;
+      try{
+        for (const k of keys) await playOne(k);
+      } finally {
+        _playing = false;
+      }
+    }
+
+    function playOne(key){
+      return new Promise(resolve => {
+        const a = new Audio(VOICE_BASE + key + '.wav');
+        a.onended = resolve;
+        a.onerror = resolve;
+        a.play().catch(resolve);
+      });
+    }
+
+    async function requestVoiceQueue(reason){
+      try{
+        setToast('VOICE REQ... (' + reason + ')');
+    
+        if (!GAS_API_URL || GAS_API_URL.includes('PASTE')) {
+          setToast('VOICE STOP: GAS_API_URL not set');
+          console.log('GAS_API_URL not set');
+          return;
+        }
+    
+        const url = GAS_API_URL + '?reason=' + encodeURIComponent(reason || '');
+        console.log('requestVoiceQueue fetch', url);
+    
+        const r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+    
+        const res = await r.json();
+        console.log('getVoiceQueueForNow success', res);
+    
+        const voices = (res && res.voices) ? res.voices : [];
+        setToast('VOICE OK: ' + (voices.join(', ') || 'none'));
+    
+        if (!voices.length) return;
+        await playQueue(voices);
+    
+      }catch(err){
+        setToast('VOICE FAIL');
+        console.log('getVoiceQueueForNow FAILED', err);
+      }
+    }
+
+    // ===== TTS (Web Speech API) =====
+    let _voice = null;
+
+    function setToast(msg){
+      if (!DEBUG) return;
+      toast.textContent = msg;
+    }
+
+    function setMenuActive(page){
+      [...menu.querySelectorAll('.mBtn')].forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.page === page);
+      });
+    }
+
+    // 放置復帰
+    function resetIdleTimer(){
+      if (idleTimer) clearTimeout(idleTimer);
+
+      const sec =
+        (currentPage === 'finance') ? IDLE_FINANCE_SEC :
+        (currentPage === 'game')    ? IDLE_GAME_SEC :
+                                    IDLE_HOME_SEC;
+
+      if (!sec || sec <= 0) return;
+
+      idleTimer = setTimeout(() => {
+        // いきなり戻すと泣くから、まずホームへ
+        goHome({ reason:'idle' });
+      }, sec * 1000);
+    }
+    ['click','touchstart','mousemove','keydown'].forEach(ev=>{
+      window.addEventListener(ev, resetIdleTimer, { passive:true });
+    });
+
+    // ====== navigation (preload swap) ======
+    function navigate(page, { reason='manual' } = {}) {
+      if (!PAGES[page]) return;
+      if (reason === 'manual') stopAuto();
+
+      const url = PAGES[page].url;
+
+      setToast(`loading: ${page} (${reason})`);
+      setMenuActive(page);
+
+      // 前のonloadを外す（レース防止）
+      view.onload = null;
+
+      // この遷移だけ有効にするトークン
+      const myToken = ++navToken;
+
+      // ✅ この遷移で「shown確定」は1回だけにする
+      let settled = false;
+      const settleShown = (via) => {
+        if (settled) return;
+        if (myToken !== navToken) return;
+        settled = true;
+
+        currentPage = page;
+        setToast(`shown${via}: ${page}`);
+        resetIdleTimer();
+
+        rtClock.style.display = (page === 'home') ? 'block' : 'none';
+
+        // ====== 🔊 ここがトリガー：home表示確定で鳴らす ======
+        if (page === 'home') {
+          const allow = (reason === 'manual' || reason === 'boot');
+
+          console.log('VOICE TRIGGER check', { page, reason, allow });
+          if (allow) {
+            setToast('VOICE TRIGGER');
+            requestVoiceQueue(reason);
+          }
+        }
+      };
+
+      // onload来ない保険
+      const FALLBACK_MS = 2500;
+      const fb = setTimeout(() => settleShown('*'), FALLBACK_MS);
+
+      // onload来たら即確定
+      view.onload = () => {
+        clearTimeout(fb);
+        settleShown('');
+      };
+
+      // 遷移
+      view.src = url;
+    }
+
+    // ====== auto rotate ======
+    function startAuto(){
+      if (autoTimer) return;
+      autoEnabled = true;
+
+      // auto対象のどれかを表示してないなら先頭へ
+      const first = AUTO_ORDER[0];
+      if (!currentPage || !PAGES[currentPage].auto) {
+        autoIndex = 0;
+        navigate(first, { reason:'auto' });
+      } else {
+        autoIndex = AUTO_ORDER.indexOf(currentPage);
+        if (autoIndex < 0) autoIndex = 0;
+      }
+
+      const firstDelay = BOOT_HOLD_SEC * 1000;
+
+      autoTimer = setTimeout(() => {
+        autoTimer = setInterval(() => {
+          if (!autoEnabled) return;
+          autoIndex = (autoIndex + 1) % AUTO_ORDER.length;
+          navigate(AUTO_ORDER[autoIndex], { reason:'auto' });
+        }, AUTO_SEC * 1000);
+      }, firstDelay);
+
+    }
+
+    function stopAuto(){
+      autoEnabled = false;
+      if (autoTimer) {
+        clearTimeout(autoTimer);
+        clearInterval(autoTimer);
+      }
+      autoTimer = null;
+    }
+
+    function goHome({reason='manual'} = {}){
+      navigate('home', { reason });
+      startAuto(); // ホームは自動巡回復帰スイッチ
+    }
+
+    // ====== menu events ======
+    window.addEventListener('pointerdown', sfxUnlock, { once:true });
+
+    let _lastTap = 0;
+
+    function onMenu(e){
+      // 連打/二重イベント抑止（350ms以内は捨てる）
+      const t = Date.now();
+      if (t - _lastTap < 350) return;
+      _lastTap = t;
+
+      e.preventDefault(); // 余計なclick生成を抑える端末がある
+      sfxUnlock();
+      sfxMenu();
+
+      const btn = e.target.closest('.mBtn');
+      if (!btn) return;
+      const page = btn.dataset.page;
+
+      if (page === 'test') {
+        // ✅ これが最強：確実に鳴る
+        playQueue(['MORNING_SUMMARY']); // 何でもええ
+        // もしくは GAS 呼び出し確認したいなら：
+        // requestVoiceQueue('manual');
+        return;
+      }
+
+      if (page === 'home') return goHome({reason:'manual'});
+      navigate(page, { reason:'manual' });
+    }
+
+    menu.addEventListener('pointerdown', onMenu);
+
+    // ====== boot ======
+    currentPage = null;
+
+    // ★C: 起動直後は必ず navigate 経由で home を踏む（settleShown を確実に通す）
+    navigate('home', { reason: 'boot' });
+
+    // その後 auto 開始（home を起点に回す）
+    startAuto();
+
+    resetIdleTimer();
+
+    const CLOCK_SPEAK_TIMES = ['06:55', '07:20', '07:40', '18:30', '21:00'];
+    const CLOCK_KEY_PREFIX = 'clockSpoke_'; // 二重防止
+
+    function tickClockVoice(){
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2,'0');
+      const mm = String(now.getMinutes()).padStart(2,'0');
+      const hm = `${hh}:${mm}`;
+
+      if (!CLOCK_SPEAK_TIMES.includes(hm)) return;
+
+      const day = now.toISOString().slice(0,10);
+      const key = `${CLOCK_KEY_PREFIX}${day}_${hm}`;
+      if (localStorage.getItem(key)) return;
+
+      localStorage.setItem(key, '1');
+
+      // ★ 7:40だけ専用reasonを投げる
+      if (hm === '07:40') {
+        requestVoiceQueue('clock_0740');   // ←週明け上履き・体操服用
+      } else {
+        requestVoiceQueue('clock');        // ←通常の朝・夜アナウンス
+      }
+    }
+
+    setInterval(tickClockVoice, 15 * 1000);
+
+    // ===== SFX (Web Audio) =====
+    let _ac = null;
+
+    function sfxUnlock(){
+      if (_ac) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      _ac = new AC();
+
+      // unlock用に無音を一瞬鳴らす（端末によって必要）
+      const o = _ac.createOscillator();
+      const g = _ac.createGain();
+      g.gain.value = 0.0001;
+      o.connect(g).connect(_ac.destination);
+      o.start();
+      o.stop(_ac.currentTime + 0.02);
+    }
+
+    function sfxTone(freq=440, ms=80, type='sine', vol=0.12){
+      if (!_ac) return;
+      const t0 = _ac.currentTime;
+      const o = _ac.createOscillator();
+      const g = _ac.createGain();
+
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+
+      // クリック音防止のエンベロープ
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms/1000);
+
+      o.connect(g).connect(_ac.destination);
+      o.start(t0);
+      o.stop(t0 + ms/1000 + 0.02);
+    }
+
+    // 使いやすいプリセット
+    function sfxMenu(){      sfxTone(880, 35, 'square', 0.06); }      // ピッ
+    function sfxCorrect(){   sfxTone(784, 60,'sine', 0.10); setTimeout(()=>sfxTone(1046, 80,'sine',0.12), 70); } // ポーン
+    function sfxWrong(){     sfxTone(160,120,'sawtooth',0.14); setTimeout(()=>sfxTone(120,120,'sawtooth',0.14), 70); } // ブー
+
+  } catch (e) {
+    const t = document.getElementById('toast');
+    if (t) t.textContent = 'ERR: ' + (e && e.message ? e.message : e);
+    console.log(e);
+  }
+
+})();
+</script>
+</body>
+</html>
+
