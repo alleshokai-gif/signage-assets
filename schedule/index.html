@@ -1,1 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Schedule</title>
+  <style>
+    html,body{height:100%;margin:0;}
+    #bar{display:flex;gap:8px;padding:8px;align-items:center;}
+    #frame{width:100%;height:calc(100% - 48px);border:0;}
+    button{padding:10px 12px;font-size:14px;}
+    #msg{font-size:12px;opacity:.8}
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <button id="open">TimeTreeを開く</button>
+    <span id="msg"></span>
+  </div>
 
+  <iframe id="frame" referrerpolicy="no-referrer"></iframe>
+
+  <script>
+    const URL = 'https://timetreeapp.com/calendars/2UVrXNmcoc3i';
+
+    const frame = document.getElementById('frame');
+    const msg   = document.getElementById('msg');
+
+    // iframe試行
+    frame.src = URL;
+
+    // フォールバック（同じタブで開く）
+    document.getElementById('open').onclick = () => location.href = URL;
+
+    // 埋め込み制限/ログイン誘導の案内（厳密判定は難しいのでメッセだけ）
+    setTimeout(() => {
+      msg.textContent = '表示されん時は「TimeTreeを開く」押してな（ログイン or 埋め込み制限の可能性）';
+    }, 2000);
+  </script>
+</body>
+</html>
