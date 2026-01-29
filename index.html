@@ -207,6 +207,9 @@
       <button class="mBtn" data-page="finance" aria-label="finance">
         <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_FINANCE.png" alt="finance">
       </button>
+      <button class="mBtn" data-page="schedule" aria-label="schedule">
+        <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_SCHEDULE.png" alt="schedule">
+      </button>
       <button class="mBtn" data-page="temp" aria-label="temp">
         <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_TEMP.png" alt="temp">
       </button>
@@ -226,12 +229,14 @@
     // ====== 兄弟：ここだけ差し替えたらOK ======
     // ※ Lookerの「埋め込みURL」推奨（/embed/reporting/...）
     const PAGES = {
-      home:    { url: 'https://lookerstudio.google.com/embed/reporting/c3341ade-526b-4ef1-8f77-e04e885ccf81/page/p_7ie80j9qzd',    auto: true  },
-      temp:    { url: 'https://lookerstudio.google.com/embed/reporting/a9247f37-fc30-425b-a648-1c360e725914/page/p_2o3y60glyd',    auto: true  },
-      school:  { url: 'https://lookerstudio.google.com/embed/reporting/e56ad71b-8c4c-4a59-88fa-99e773c8809a/page/p_20w8aknpyd',  auto: true  },
-      finance: { url: 'https://lookerstudio.google.com/embed/reporting/27c09c89-3b08-46f8-bc49-db0d6e60c3fe/page/p_kbyrml84yd', auto: false }, // 手動専用
-      game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan',           auto: false }, // 手動専用
+      home:    { url: 'https://lookerstudio.google.com/embed/reporting/c3341ade-526b-4ef1-8f77-e04e885ccf81/page/p_7ie80j9qzd', auto:true },
+      temp:    { url: 'https://lookerstudio.google.com/embed/reporting/a9247f37-fc30-425b-a648-1c360e725914/page/p_2o3y60glyd', auto:true },
+      school:  { url: 'https://lookerstudio.google.com/embed/reporting/e56ad71b-8c4c-4a59-88fa-99e773c8809a/page/p_20w8aknpyd', auto:true },
+      finance: { url: 'https://lookerstudio.google.com/embed/reporting/27c09c89-3b08-46f8-bc49-db0d6e60c3fe/page/p_kbyrml84yd', auto:false },
+      schedule:{ url: 'https://alleshokai-gif.github.io/signage-assets/schedule', auto:false }, // ★ここ
+      game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan', auto:false },
     };
+
     // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxImsH4sWBlEbYaiEl4X7mUmAsuzr3j8hRJeg7Hlq6fXSQRh79XCGB8PoX7arfbPrnbXQ/exec';
     const AUTO_ORDER = Object.keys(PAGES).filter(k => PAGES[k].auto);
