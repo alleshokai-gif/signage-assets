@@ -6,16 +6,35 @@
   <title>Schedule</title>
   <style>
     :root{
-      --menu-h: 150px; /* index.htmlと合わせる */
+      --menu-h: 150px; /* index.htmlと揃える */
+      --gap: 10px;
+      --left-w: 34%;   /* 左（月）幅 */
     }
     html,body{height:100%;margin:0;background:#000;overflow:hidden;}
-    /* 下メニュー分だけ“見切れ防止”で余白確保 */
     #wrap{
       position:absolute; inset:0;
       padding-bottom: var(--menu-h);
       box-sizing: border-box;
+      background:#000;
     }
-    #frame{
+    #grid{
+      height:100%;
+      display:flex;
+      gap: var(--gap);
+      padding: var(--gap);
+      box-sizing: border-box;
+    }
+    .pane{
+      height:100%;
+      background:#000;
+      border-radius: 12px;
+      overflow:hidden;
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    }
+    #left{ width: var(--left-w); }
+    #right{ flex: 1; }
+
+    iframe{
       width:100%;
       height:100%;
       border:0;
@@ -25,25 +44,52 @@
 </head>
 <body>
   <div id="wrap">
-    <iframe id="frame" scrolling="no"></iframe>
+    <div id="grid">
+      <div id="left" class="pane">
+        <iframe id="calMonth" scrolling="no"></iframe>
+      </div>
+      <div id="right" class="pane">
+        <iframe id="calWeek" scrolling="no"></iframe>
+      </div>
+    </div>
   </div>
 
   <script>
-    // 兄弟のファミリーカレンダー埋め込みURL（サイネージ向け：一覧＋UI消し）
-    const URL =
+    const CAL = 'family06723396614140350584%40group.calendar.google.com';
+    const CTZ = 'Asia%2FTokyo';
+
+    // 左：月（碁盤）
+    const URL_MONTH =
       'https://calendar.google.com/calendar/embed' +
-      '?src=family06723396614140350584%40group.calendar.google.com' +
-      '&ctz=Asia%2FTokyo' +
-      '&mode=AGENDA' +
+      '?src=' + CAL +
+      '&ctz=' + CTZ +
+      '&mode=MONTH' +
       '&showTitle=0' +
-      '&showNav=0' +
-      '&showDate=0' +
       '&showPrint=0' +
       '&showTabs=0' +
       '&showCalendars=0' +
       '&wkst=2';
 
-    document.getElementById('frame').src = URL;
+    // 右：週（グリッド）
+    const URL_WEEK =
+      'https://calendar.google.com/calendar/embed' +
+      '?src=' + CAL +
+      '&ctz=' + CTZ +
+      '&mode=WEEK' +
+      '&showTitle=0' +
+      '&showPrint=0' +
+      '&showTabs=0' +
+      '&showCalendars=0' +
+      '&wkst=2';
+
+    // 右を「一覧（Agenda）」にしたいなら、上のURL_WEEKをこれに差し替え
+    // const URL_WEEK = 'https://calendar.google.com/calendar/embed'
+    //   + '?src=' + CAL + '&ctz=' + CTZ
+    //   + '&mode=AGENDA&showTitle=0&showNav=0&showDate=0&showPrint=0&showTabs=0&showCalendars=0&wkst=2';
+
+    document.getElementById('calMonth').src = URL_MONTH;
+    document.getElementById('calWeek').src  = URL_WEEK;
   </script>
 </body>
 </html>
+
