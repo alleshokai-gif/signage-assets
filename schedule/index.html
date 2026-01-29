@@ -5,37 +5,45 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Schedule</title>
   <style>
-    html,body{height:100%;margin:0;}
-    #bar{display:flex;gap:8px;padding:8px;align-items:center;}
-    #frame{width:100%;height:calc(100% - 48px);border:0;}
-    button{padding:10px 12px;font-size:14px;}
-    #msg{font-size:12px;opacity:.8}
+    :root{
+      --menu-h: 150px; /* index.htmlと合わせる */
+    }
+    html,body{height:100%;margin:0;background:#000;overflow:hidden;}
+    /* 下メニュー分だけ“見切れ防止”で余白確保 */
+    #wrap{
+      position:absolute; inset:0;
+      padding-bottom: var(--menu-h);
+      box-sizing: border-box;
+    }
+    #frame{
+      width:100%;
+      height:100%;
+      border:0;
+      background:#000;
+    }
   </style>
 </head>
 <body>
-  <div id="bar">
-    <button id="open">TimeTreeを開く</button>
-    <span id="msg"></span>
+  <div id="wrap">
+    <iframe id="frame" scrolling="no"></iframe>
   </div>
 
-  <iframe id="frame" referrerpolicy="no-referrer"></iframe>
-
   <script>
-    const URL = 'https://timetreeapp.com/calendars/2UVrXNmcoc3i';
+    // 兄弟のファミリーカレンダー埋め込みURL（サイネージ向け：一覧＋UI消し）
+    const URL =
+      'https://calendar.google.com/calendar/embed' +
+      '?src=family06723396614140350584%40group.calendar.google.com' +
+      '&ctz=Asia%2FTokyo' +
+      '&mode=AGENDA' +
+      '&showTitle=0' +
+      '&showNav=0' +
+      '&showDate=0' +
+      '&showPrint=0' +
+      '&showTabs=0' +
+      '&showCalendars=0' +
+      '&wkst=2';
 
-    const frame = document.getElementById('frame');
-    const msg   = document.getElementById('msg');
-
-    // iframe試行
-    frame.src = URL;
-
-    // フォールバック（同じタブで開く）
-    document.getElementById('open').onclick = () => location.href = URL;
-
-    // 埋め込み制限/ログイン誘導の案内（厳密判定は難しいのでメッセだけ）
-    setTimeout(() => {
-      msg.textContent = '表示されん時は「TimeTreeを開く」押してな（ログイン or 埋め込み制限の可能性）';
-    }, 2000);
+    document.getElementById('frame').src = URL;
   </script>
 </body>
 </html>
