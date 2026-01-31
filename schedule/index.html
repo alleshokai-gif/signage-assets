@@ -71,21 +71,21 @@
       '&wkst=2';
 
     // 右：週（グリッド）
-    const URL_WEEK =
-      'https://calendar.google.com/calendar/embed' +
-      '?src=' + CAL +
-      '&ctz=' + CTZ +
-      '&mode=WEEK' +
-      '&showTitle=0' +
-      '&showPrint=0' +
-      '&showTabs=0' +
-      '&showCalendars=0' +
-      '&wkst=2';
+    //const URL_WEEK =
+    //  'https://calendar.google.com/calendar/embed' +
+    //  '?src=' + CAL +
+    //  '&ctz=' + CTZ +
+    //  '&mode=WEEK' +
+    //  '&showTitle=0' +
+    //  '&showPrint=0' +
+    //  '&showTabs=0' +
+    //  '&showCalendars=0' +
+    //  '&wkst=2';
 
     // 右を「一覧（Agenda）」にしたいなら、上のURL_WEEKをこれに差し替え
-    // const URL_WEEK = 'https://calendar.google.com/calendar/embed'
-    //   + '?src=' + CAL + '&ctz=' + CTZ
-    //   + '&mode=AGENDA&showTitle=0&showNav=0&showDate=0&showPrint=0&showTabs=0&showCalendars=0&wkst=2';
+    const URL_WEEK = 'https://calendar.google.com/calendar/embed'
+    + '?src=' + CAL + '&ctz=' + CTZ
+    + '&mode=AGENDA&showTitle=0&showNav=0&showDate=0&showPrint=0&showTabs=0&showCalendars=0&wkst=2';
 
     document.getElementById('calMonth').src = URL_MONTH;
     document.getElementById('calWeek').src  = URL_WEEK;
