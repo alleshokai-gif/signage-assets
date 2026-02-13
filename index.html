@@ -217,27 +217,58 @@
       gap: 16px;
     }
     
+    /* ===== 子メニューボタン：OSっぽいダークカード ===== */
     .subItem{
+      /* 見た目を“強制”してデフォルト白ボタンを殺す */
+      border: 0;
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.95);
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    
+      /* サイズ・配置 */
       height: 120px;
       border-radius: 22px;
     
       display:flex;
-      flex-direction: column;   /* ← 縦 */
-      align-items: center;      /* ← 横中央揃え */
-      justify-content: center;  /* ← 縦中央 */
+      flex-direction: column;     /* ← 縦 */
+      align-items: center;        /* ← 横中央 */
+      justify-content: flex-start;/* ← 上寄せで“揃う” */
+      gap: 10px;
     
-      gap: 8px;
+      padding-top: 14px;          /* ← アイコン位置を揃える */
+      padding-bottom: 10px;
+    
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transform: translateZ(0);
     }
     
+    /* 押したとき気持ちよく */
+    .subItem:active{
+      transform: scale(0.98);
+      background: rgba(255,255,255,.14);
+    }
+    
+    /* アイコン：枠いっぱい。余白は画像側で詰める */
     .subIconImg{
-      width: 80px;              /* ← デカく */
+      width: 80px;
       height: 80px;
-      border-radius: 20px;      /* ← 画像自体を角丸 */
-      object-fit: cover;        /* ← 余白なし */
+    
+      /* “角丸は画像側”に統一 */
+      border-radius: 20px;
+    
+      /* PNGの中身をできるだけ埋める */
+      object-fit: cover;   /* ← 余白を消したいなら cover */
+      display:block;
     }
     
+    /* 文字 */
     .subLabel{
       font-size: 28px;
+      font-weight: 700;
+      line-height: 1.05;
+      text-align: center;
+      text-shadow: 0 6px 18px rgba(0,0,0,.35);
     }
     
     .subIcon{
@@ -249,7 +280,6 @@
       background: rgba(255,255,255,.22);
       transform: scale(0.97);
     }
-
     
     /* 画面が小さいときは自動で縮める（保険） */
     @media (max-width: 900px){
