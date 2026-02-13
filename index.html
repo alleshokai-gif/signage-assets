@@ -237,12 +237,33 @@
     .subIcon{
       font-size: 44px;
     }
-    
+    .subIconWrap{
+      width: 80px;
+      height: 80px;
+      border-radius: 22px;
+      background: rgba(255,255,255,.12);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow: 0 8px 20px rgba(0,0,0,.35);
+    }
+
+    .subIconImg{
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+
     .subLabel{
       font-size: 32px;
     }
 
     .subItem:active{ transform: scale(0.98); }
+    .subItem:active .subIconWrap{
+      background: rgba(255,255,255,.22);
+      transform: scale(0.97);
+    }
+
     
     /* 画面が小さいときは自動で縮める（保険） */
     @media (max-width: 900px){
@@ -593,24 +614,24 @@
     // --- 子メニュー定義（まずはここだけでOK） ---
     const SUB = {
       school: [
-        { label:'給食/予定',  icon:'🍱', page:'school' },      // 既存PAGES.school
-        { label:'学級閉鎖', icon:'🦠', url:'https://lookerstudio.google.com/embed/reporting/543880b2-7b47-4237-8f34-a38f5a8da822/page/p_o5u8y9pt0d' },
-        { label:'閉鎖マップ', icon:'🗺️', url:'https://lookerstudio.google.com/embed/reporting/ac202568-eb4b-409a-8436-2766b21221ad/page/p_un4ijj2v0d' },
+        { label:'給食/予定',  iconImg:'ICON_schoolTOP.png', page:'school' },      // 既存PAGES.school
+        { label:'学級閉鎖', iconImg:'ICON_shoolclose', url:'https://lookerstudio.google.com/embed/reporting/543880b2-7b47-4237-8f34-a38f5a8da822/page/p_o5u8y9pt0d' },
+        { label:'閉鎖マップ', iconImg:'ICON_schoolcloseMAP' url:'https://lookerstudio.google.com/embed/reporting/ac202568-eb4b-409a-8436-2766b21221ad/page/p_un4ijj2v0d' },
       ],
       game: [
-        { label:'九九', icon:'🗺️',  url:'https://alleshokai-gif.github.io/kuku-game/' },
-        { label:'筆算', icon:'🗺️',  page:'game' },            // 既存PAGES.game(筆算)
+        { label:'九九', iconImg:'ICON_gameKUKU.png',  url:'https://alleshokai-gif.github.io/kuku-game/' },
+        { label:'筆算', iconImg:'ICON_gameHS.png',  page:'game' },            // 既存PAGES.game(筆算)
+        { label:'ボンボン分析', iconImg:'ICON_bonbon.png', url:'https://lookerstudio.google.com/embed/reporting/5e1dd718-4c59-4f7f-b380-9af4b919003e/page/p_fhnahkeo0d' },
       ],
       finance: [
-        { label:'家計ダッシュ', icon:'🗺️', page:'finance' },  // 既存PAGES.finance
-        { label:'ピックアップ経費', icon:'🗺️', url:'https://lookerstudio.google.com/embed/reporting/9fb4191b-bed4-4c43-8609-2d54b25bddcb/page/p_sd2wt4noyd' },
-        { label:'光熱費', icon:'🗺️', url:'https://lookerstudio.google.com/embed/reporting/fe2966db-7911-4345-9bb9-e7f20ce67f1e/page/p_kbyrml84yd' },
-        { label:'ベンダーランク', icon:'🗺️', url:'https://lookerstudio.google.com/embed/reporting/7aa1e911-8971-4724-aea3-731a3290eb97/page/p_vdxclf0zzd' },
-        { label:'支出ランク', icon:'🗺️', url:'https://lookerstudio.google.com/embed/reporting/a9e7808d-828d-4c1f-8317-5adc3e44386f/page/p_4s4wd13m0d' },
-        { label:'ボンボン分析', icon:'🗺️', url:'https://lookerstudio.google.com/embed/reporting/5e1dd718-4c59-4f7f-b380-9af4b919003e/page/p_fhnahkeo0d' },
+        { label:'家計ダッシュ', iconImg:'ICON_financeTOP.png', page:'finance' },  // 既存PAGES.finance
+        { label:'ピックアップ経費', iconImg:'ICON_financePIC.png', url:'https://lookerstudio.google.com/embed/reporting/9fb4191b-bed4-4c43-8609-2d54b25bddcb/page/p_sd2wt4noyd' },
+        { label:'光熱費', iconImg:'ICON_financeUTILITY.png', url:'https://lookerstudio.google.com/embed/reporting/fe2966db-7911-4345-9bb9-e7f20ce67f1e/page/p_kbyrml84yd' },
+        { label:'ベンダーランク', iconImg:'ICON_financeVR.png', url:'https://lookerstudio.google.com/embed/reporting/7aa1e911-8971-4724-aea3-731a3290eb97/page/p_vdxclf0zzd' },
+        { label:'支出ランク', iconImg:'ICON_financeAmtR.png', url:'https://lookerstudio.google.com/embed/reporting/a9e7808d-828d-4c1f-8317-5adc3e44386f/page/p_4s4wd13m0d' },
       ],
     };
-    
+    const ICON_BASE = 'https://alleshokai-gif.github.io/signage-assets/assets/icons/';
     // --- 子メニューDOM ---
     const subModal = document.getElementById('subModal');
     const subGrid  = document.getElementById('subGrid');
@@ -627,48 +648,43 @@
       for (const it of items){
         const b = document.createElement('button');
         b.className = 'subItem';
-        const icon = document.createElement('span');
-        icon.className = 'subIcon';
-        icon.textContent = it.icon || '';
       
+        // ===== アイコン枠 =====
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'subIconWrap';
+      
+        if (it.iconImg){
+          const img = document.createElement('img');
+          img.src = ICON_BASE + it.iconImg;
+          img.className = 'subIconImg';
+          iconWrap.appendChild(img);
+        }
+      
+        // ===== ラベル =====
         const label = document.createElement('span');
         label.className = 'subLabel';
         label.textContent = it.label;
       
-        b.appendChild(icon);
+        b.appendChild(iconWrap);
         b.appendChild(label);
-    
+      
+        // クリック処理（既存そのまま）
         b.addEventListener('pointerdown', (e)=>{
           e.preventDefault();
           sfxUnlock(); sfxMenu();
-    
-          // 既存PAGESのpage指定ならnavigate流用
+      
           if (it.page){
             navigate(it.page, { reason:'manual' });
           } else if (it.url){
-            // URL直指定もOK（PAGES増やさず運用できる）
-            view.onload = null;
-            const myToken = ++navToken;
-            let settled = false;
-            const settleShown = () => {
-              if (settled) return;
-              if (myToken !== navToken) return;
-              settled = true;
-              currentPage = parentKey; // 親カテゴリ扱い
-              setMenuActive(parentKey);
-              resetIdleTimer();
-              rtClock.style.display = 'none';
-            };
-            const fb = setTimeout(settleShown, 2500);
-            view.onload = () => { clearTimeout(fb); settleShown(); };
             view.src = it.url;
           }
-    
+      
           closeSubMenu();
         });
-    
+      
         subGrid.appendChild(b);
       }
+
     
       subModal.classList.add('show');
       subModal.setAttribute('aria-hidden', 'false');
