@@ -218,44 +218,30 @@
     }
     
     .subItem{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap: 16px;
-    
       height: 120px;
       border-radius: 22px;
-      border: 0;
-      background: rgba(255,255,255,.10);
-      color: rgba(255,255,255,.95);
-      font-size: 32px;
-      font-weight: 600;
-      letter-spacing:.03em;
-      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    
+      display:flex;
+      flex-direction: column;   /* ← 縦 */
+      align-items: center;      /* ← 横中央揃え */
+      justify-content: center;  /* ← 縦中央 */
+    
+      gap: 8px;
+    }
+    
+    .subIconImg{
+      width: 80px;              /* ← デカく */
+      height: 80px;
+      border-radius: 20px;      /* ← 画像自体を角丸 */
+      object-fit: cover;        /* ← 余白なし */
+    }
+    
+    .subLabel{
+      font-size: 28px;
     }
     
     .subIcon{
       font-size: 44px;
-    }
-    .subIconWrap{
-      width: 80px;
-      height: 80px;
-      border-radius: 22px;
-      background: rgba(255,255,255,.12);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      box-shadow: 0 8px 20px rgba(0,0,0,.35);
-    }
-
-    .subIconImg{
-      width: 48px;
-      height: 48px;
-      object-fit: contain;
-    }
-
-    .subLabel{
-      font-size: 32px;
     }
 
     .subItem:active{ transform: scale(0.98); }
@@ -649,24 +635,21 @@
         const b = document.createElement('button');
         b.className = 'subItem';
       
-        // ===== アイコン枠 =====
-        const iconWrap = document.createElement('div');
-        iconWrap.className = 'subIconWrap';
-      
+        // ===== アイコン（画像を直で配置） =====
         if (it.iconImg){
           const img = document.createElement('img');
           img.src = ICON_BASE + it.iconImg;
           img.className = 'subIconImg';
-          iconWrap.appendChild(img);
+          b.appendChild(img);
         }
-      
+        
         // ===== ラベル =====
         const label = document.createElement('span');
         label.className = 'subLabel';
         label.textContent = it.label;
-      
-        b.appendChild(iconWrap);
+        
         b.appendChild(label);
+
       
         // クリック処理（既存そのまま）
         b.addEventListener('pointerdown', (e)=>{
