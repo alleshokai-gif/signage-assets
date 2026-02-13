@@ -170,7 +170,80 @@
       border-radius: 0;
       pointer-events:none;
     }
+    .subModal{
+      position:fixed; inset:0;
+      display:none;
+      z-index: 200;
+      background: rgba(0,0,0,.55);
+      align-items:center;
+      justify-content:center;
+    }
+    .subModal.show{ display:flex; }
+    
+    .subPanel{
+      width: min(920px, 92vw);
+      border-radius: 28px;
+      background: rgba(15,15,15,.92);
+      box-shadow: 0 18px 40px rgba(0,0,0,.55);
+      border: 1px solid rgba(255,255,255,.10);
+      padding: 18px 18px 22px;
+    }
+    
+    .subHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom: 14px;
+    }
+    .subTitle{
+      font-size: 34px;
+      font-weight: 600;
+      color: rgba(255,255,255,.92);
+      letter-spacing:.04em;
+    }
+    .subClose{
+      width:64px; height:64px;
+      border-radius: 18px;
+      border: 0;
+      font-size: 44px;
+      line-height: 1;
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.92);
+    }
+    
+    .subGrid{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr); /* 2列固定が押しやすい */
+      gap: 16px;
+    }
+    
+    .subItem{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap: 16px;
+    
+      height: 120px;
+      border-radius: 22px;
+      border: 0;
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.95);
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing:.03em;
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    }
+    
+    .subIcon{
+      font-size: 44px;
+    }
+    
+    .subLabel{
+      font-size: 32px;
+    }
 
+    .subItem:active{ transform: scale(0.98); }
+    
     /* 画面が小さいときは自動で縮める（保険） */
     @media (max-width: 900px){
       :root{ --icon-size: 92px; --menu-h: 135px; --menu-gap: 16px; }
@@ -221,7 +294,17 @@
       </button>
     </div>
   </div>
-
+  <!-- 子メニュー（モーダル） -->
+  <div id="subModal" class="subModal" aria-hidden="true">
+    <div class="subPanel">
+      <div class="subHead">
+        <div id="subTitle" class="subTitle">MENU</div>
+        <button id="subClose" class="subClose" aria-label="close">×</button>
+      </div>
+      <div id="subGrid" class="subGrid"></div>
+    </div>
+  </div>
+  
 <script>
 (() => {
 
@@ -497,11 +580,110 @@
       }
 
       if (page === 'home') return goHome({reason:'manual'});
+      
+      // ★ school/game/finance は子メニューを開く
+      if (SUB[page]) return openSubMenu(page);
+      
       navigate(page, { reason:'manual' });
+
     }
 
     menu.addEventListener('pointerdown', onMenu);
 
+    // --- 子メニュー定義（まずはここだけでOK） ---
+    const SUB = {
+      school: [
+        { label:'給食/予定',  icon:'🍱', page:'school' },      // 既存PAGES.school
+        { label:'学級閉鎖', icon:'🦠', url:'https://lookerstudio.google.com/embed/reporting/XXXX/page/YYYY' },
+        { label:'閉鎖マップ', icon:'🗺️', url:'https://alleshokai-gif.github.io/signage-assets/school/close_map' },
+      ],
+      game: [
+        { label:'九九', icon:'🗺️',  url:'https://alleshokai-gif.github.io/signage-assets/games/kuku' },
+        { label:'筆算', icon:'🗺️',  page:'game' },            // 既存PAGES.game(筆算)
+      ],
+      finance: [
+        { label:'家計ダッシュ', icon:'🗺️', page:'finance' },  // 既存PAGES.finance
+        { label:'詳細1', icon:'🗺️', url:'https://lookerstudio.google.com/embed/reporting/XXXX/page/AAAA' },
+        { label:'詳細2', icon:'🗺️', url:'https://lookerstudio.google.com/embed/reporting/XXXX/page/BBBB' },
+      ],
+    };
+    
+    // --- 子メニューDOM ---
+    const subModal = document.getElementById('subModal');
+    const subGrid  = document.getElementById('subGrid');
+    const subTitle = document.getElementById('subTitle');
+    const subClose = document.getElementById('subClose');
+    
+    function openSubMenu(parentKey){
+      const items = SUB[parentKey];
+      if (!items || !items.length) return;
+    
+      subTitle.textContent = parentKey.toUpperCase();
+      subGrid.innerHTML = '';
+    
+      for (const it of items){
+        const b = document.createElement('button');
+        b.className = 'subItem';
+        const icon = document.createElement('span');
+        icon.className = 'subIcon';
+        icon.textContent = it.icon || '';
+      
+        const label = document.createElement('span');
+        label.className = 'subLabel';
+        label.textContent = it.label;
+      
+        b.appendChild(icon);
+        b.appendChild(label);
+    
+        b.addEventListener('pointerdown', (e)=>{
+          e.preventDefault();
+          sfxUnlock(); sfxMenu();
+    
+          // 既存PAGESのpage指定ならnavigate流用
+          if (it.page){
+            navigate(it.page, { reason:'manual' });
+          } else if (it.url){
+            // URL直指定もOK（PAGES増やさず運用できる）
+            view.onload = null;
+            const myToken = ++navToken;
+            let settled = false;
+            const settleShown = () => {
+              if (settled) return;
+              if (myToken !== navToken) return;
+              settled = true;
+              currentPage = parentKey; // 親カテゴリ扱い
+              setMenuActive(parentKey);
+              resetIdleTimer();
+              rtClock.style.display = 'none';
+            };
+            const fb = setTimeout(settleShown, 2500);
+            view.onload = () => { clearTimeout(fb); settleShown(); };
+            view.src = it.url;
+          }
+    
+          closeSubMenu();
+        });
+    
+        subGrid.appendChild(b);
+      }
+    
+      subModal.classList.add('show');
+      subModal.setAttribute('aria-hidden', 'false');
+    }
+    
+    function closeSubMenu(){
+      subModal.classList.remove('show');
+      subModal.setAttribute('aria-hidden', 'true');
+    }
+    
+    subClose.addEventListener('pointerdown', (e)=>{ e.preventDefault(); sfxMenu(); closeSubMenu(); });
+    subModal.addEventListener('pointerdown', (e)=>{
+      if (e.target === subModal) { sfxMenu(); closeSubMenu(); } // 背景タップで閉じる
+    });
+
+
+
+    
     // ====== boot ======
     currentPage = null;
 
