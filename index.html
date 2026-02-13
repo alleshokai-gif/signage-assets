@@ -215,7 +215,7 @@
     .subGrid{
       display: grid;
       grid-template-columns: repeat(3, 1fr); /* 3列が一番OSっぽい */
-      gap: 22px;
+      gap: 26px;
     }
     
     /* タイル本体：正方形固定 */
@@ -223,7 +223,7 @@
       aspect-ratio: 1 / 1;
       width: 100%;
       border: 0;
-      border-radius: 26px;
+      border-radius: 28px;
     
       background: rgba(255,255,255,.10);
       box-shadow: 0 10px 24px rgba(0,0,0,.35);
@@ -232,7 +232,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 8px;
     
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
@@ -247,17 +247,17 @@
     
     /* アイコン：タイルの主役 */
     .subIconImg{
-      width: 96px;
-      height: 96px;
-      border-radius: 24px;
+      width: 65%;
+      height: 65%;
+      border-radius: 22px;
       object-fit: cover;
       display: block;
     }
     
     /* ラベル：短く太く */
     .subLabel{
-      font-size: 22px;
-      font-weight: 800;
+      font-size: 20px;
+      font-weight: 700;
       line-height: 1.1;
       text-align: center;
       color: rgba(255,255,255,.95);
