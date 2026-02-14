@@ -726,9 +726,8 @@
 
   function ensureAudio(){
     if (AC) return;
-    const A = window.AudioContext || window.webkitAudioContext;
-    if (!A) return;
-    AC = new A();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    AC = Ctx ? new Ctx() : null;
   }
 
   function tone(freq, ms=80, type='square', vol=0.08){
@@ -769,40 +768,42 @@
   // 3和音BGM（ファミコンっぽい短いループ）
   // ===== 改良FC風BGM =====
   // 32 steps / ループ長め
+  // メロ（コロブチカ由来の骨格。リズムは“そのままコピー”を避けて再配置）
   const MELO = [
-    'E5','E5','R','E5','R','C5','E5','R',
-    'G5','R','R','R','G4','R','R','R',
-    'C5','R','R','G4','R','R','E4','R',
-    'R','A4','R','B4','R','A#4','A4','R',
+    'E5','R','B4','C5','D5','R','C5','B4',
+    'A4','R','A4','C5','E5','R','D5','C5',
+    'B4','R','B4','C5','D5','R','E5','R',
+    'C5','R','A4','R','A4','R','R','R',
   ];
   
+  // ベース（ちぃ兄コード進行：Am E7 Am G | C Dm E7 Am）
   const BASS = [
-    'C3','C3','C3','C3','G2','G2','G2','G2',
-    'C3','C3','C3','C3','G2','G2','G2','G2',
-    'A2','A2','A2','A2','E2','E2','E2','E2',
-    'F2','F2','F2','F2','G2','G2','G2','G2',
+    'A2','R','A2','R',  'E2','R','E2','R',
+    'A2','R','A2','R',  'G2','R','G2','R',
+    'C3','R','C3','R',  'D3','R','D3','R',
+    'E2','R','E2','R',  'A2','R','A2','R',
   ];
   
+  // ハモ（コードの3度・5度を薄く。音量小さめで“それっぽさ”）
   const HARM = [
-    'C4','R','E4','R','G4','R','E4','R',
-    'C4','R','E4','R','G4','R','E4','R',
-    'A3','R','C4','R','E4','R','C4','R',
-    'F3','R','A3','R','B3','R','D4','R',
+    'C4','R','E4','R',  'G#3','R','B3','R', // Am → E7
+    'C4','R','E4','R',  'B3','R','D4','R',  // Am → G
+    'E4','R','G4','R',  'F4','R','A4','R',  // C → Dm
+    'G#3','R','B3','R', 'C4','R','E4','R',  // E7 → Am
   ];
-  
-  const STEP_MS = 150; // 速さ。180でゆっくり
+  // 32-step loop
+  const STEP_MS = 165;
   
   function startBgm(){
     ensureAudio();
     if (!AC || bgmOn) return;
     bgmOn = true;
-    btnBgm.textContent = 'BGM ■';
   
     const mkVoice = (type) => {
       const o = AC.createOscillator();
       const g = AC.createGain();
       o.type = type;
-      g.gain.value = 0;
+      g.gain.value = 0.0001;
       o.connect(g).connect(AC.destination);
       o.start();
       return {o,g};
@@ -826,7 +827,7 @@
       const hz3 = noteToHz(n3);
     
       const notes = [hz1, hz2, hz3];
-      const vols  = [0.06, 0.05, 0.04];
+      const vols  = [0.060, 0.050, 0.030]; // ハモ薄め
     
       notes.forEach((hz,i)=>{
         const v = bgmNodes[i];
@@ -835,10 +836,12 @@
           return;
         }
         v.o.frequency.setValueAtTime(hz, t);
+  
+        // ピコピコの“粒”を作る
         v.g.gain.cancelScheduledValues(t);
         v.g.gain.setValueAtTime(0.0001, t);
-        v.g.gain.linearRampToValueAtTime(vols[i], t + 0.02);
-        v.g.gain.setTargetAtTime(0.0001, t + (STEP_MS/1000)*0.80, 0.03);
+        v.g.gain.linearRampToValueAtTime(vols[i], t + 0.015);
+        v.g.gain.setTargetAtTime(0.0001, t + (STEP_MS/1000)*0.72, 0.03);
       });
     
       idx++;
@@ -846,18 +849,12 @@
   }
 
   function stopBgm(){
-    if (!bgmOn) return;
     bgmOn = false;
-    btnBgm.textContent = 'BGM ▶';
     if (bgmTimer) clearInterval(bgmTimer);
     bgmTimer = null;
     if (bgmNodes){
-      const t = AC ? AC.currentTime : 0;
       bgmNodes.forEach(v=>{
-        try{
-          v.g.gain.setTargetAtTime(0.0001, t, 0.02);
-          v.o.stop(t + 0.05);
-        }catch(_){}
+        try{ v.g.gain.value = 0.0001; v.o.stop(); }catch(e){}
       });
     }
     bgmNodes = null;
