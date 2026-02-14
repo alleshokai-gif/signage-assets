@@ -109,6 +109,15 @@
       opacity: 0;
       pointer-events: none;
     }
+    /* メニュー呼び出し“にゅ！”ゾーン（下端の透明バー） */
+    #menuHandle{
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      height: 24px;            /* 18〜28で好み */
+      z-index: 55;             /* menuWrap(50)より上でOK */
+      background: transparent; /* 見えない */
+      pointer-events: none;    /* 普段は無効（immersive時だけ有効化） */
+    }
 
     /* メニューパネル（半透明の台座） */
     #menu{
@@ -342,7 +351,7 @@
       <div id="subGrid" class="subGrid"></div>
     </div>
   </div>
-  
+  <div id="menuHandle" aria-hidden="true"></div>
 <script>
 (() => {
 
@@ -381,7 +390,8 @@
     const view = document.getElementById('view');
     const toast = document.getElementById('toast');
     const menu = document.getElementById('menu');
-
+    const menuWrap   = document.getElementById('menuWrap');
+    const menuHandle = document.getElementById('menuHandle');
 
     const rtClock = document.getElementById('rtClock');
 
@@ -501,6 +511,18 @@
     ['click','touchstart','mousemove','keydown'].forEach(ev=>{
       window.addEventListener(ev, resetIdleTimer, { passive:true });
     });
+    
+    let menuTimer = null;
+    
+    function showMenuTemporarily(ms=4000){
+      menuWrap.classList.remove('hidden');
+      clearTimeout(menuTimer);
+      menuTimer = setTimeout(()=>{
+        if (PAGES[currentPage] && PAGES[currentPage].immersive){
+          menuWrap.classList.add('hidden');
+        }
+      }, ms);
+    }
 
     // ====== navigation (preload swap) ======
     function navigate(page, { reason='manual' } = {}) {
@@ -532,11 +554,15 @@
 
         rtClock.style.display = (page === 'home') ? 'block' : 'none';
 
-        // ====== immersive制御 ======
-        if (PAGES[page].immersive){
+        // ===== immersive制御 =====
+        const immersive = !!PAGES[page].immersive;
+        
+        if (immersive){
           menuWrap.classList.add('hidden');
+          menuHandle.style.pointerEvents = 'auto';
         } else {
           menuWrap.classList.remove('hidden');
+          menuHandle.style.pointerEvents = 'none';
         }
 
         // ====== 🔊 ここがトリガー：home表示確定で鳴らす ======
@@ -808,8 +834,10 @@
       if (e.target === subModal) { sfxMenu(); closeSubMenu(); } // 背景タップで閉じる
     });
 
-
-
+    menuHandle.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      showMenuTemporarily(4000);
+    });
     
     // ====== boot ======
     currentPage = null;
