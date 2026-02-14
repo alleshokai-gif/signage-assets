@@ -101,7 +101,8 @@
       z-index: 50;
       pointer-events: auto;
     
-      transition: transform 260ms ease, opacity 260ms ease;
+      transition: transform 420ms cubic-bezier(.22,.9,.2,1),
+                  opacity   420ms cubic-bezier(.22,.9,.2,1);
     }
     
     #menuWrap.hidden{
@@ -514,7 +515,7 @@
     
     let menuTimer = null;
     
-    function showMenuTemporarily(ms=4000){
+    function showMenuTemporarily(ms=8000){
       menuWrap.classList.remove('hidden');
       clearTimeout(menuTimer);
       menuTimer = setTimeout(()=>{
@@ -837,6 +838,12 @@
     menuHandle.addEventListener('pointerdown', (e)=>{
       e.preventDefault();
       showMenuTemporarily(4000);
+    });
+    // 👇 ここに追加
+    menuWrap.addEventListener('pointerdown', ()=>{
+      if (PAGES[currentPage] && PAGES[currentPage].immersive){
+        showMenuTemporarily(8000); // 操作したら延命
+      }
     });
     
     // ====== boot ======
