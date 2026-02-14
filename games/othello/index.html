@@ -352,13 +352,10 @@
     }
 
     if (aiLevel === 'normal'){
-      // 角優先 + 評価最大
       let best = moves[0], bestS = -1e9;
       for (const m of moves){
         const nb = applyMove(b, m, WHITE);
-        let s = evalBoard(nb, WHITE);
-        // 角に打てるなら強めにボーナス
-        if ((m.r===0||m.r===7) && (m.c===0||m.c===7)) s += 200;
+        let s = WEIGHT[m.r][m.c];  // ← 盤評価だけにする
         if (s > bestS){ bestS=s; best=m; }
       }
       return best;
@@ -748,57 +745,59 @@
   }
 
   // 3和音BGM（ファミコンっぽい短いループ）
-  const SCORE = [
-    // [root, third, fifth] (Hz) / 0は休符
-    [392, 494, 588], [392, 494, 588], [440, 554, 659], [392, 494, 588],
-    [330, 415, 494], [330, 415, 494], [349, 440, 523], [330, 415, 494],
-    [294, 370, 440], [294, 370, 440], [330, 415, 494], [294, 370, 440],
-    [262, 330, 392], [262, 330, 392], [294, 370, 440], [262, 330, 392],
-  ];
-  const STEP_MS = 180;
-
+  // ===== 改良FC風BGM =====
+  const MELO = [392, 440, 494, 440, 392, 330, 349, 392];
+  const BASS = [196, 196, 220, 196, 165, 165, 174, 196];
+  const HARM = [0, 0, 294, 0, 0, 262, 0, 294];
+  
+  const STEP_MS = 220;
+  
   function startBgm(){
     ensureAudio();
-    if (!AC) return;
-    if (bgmOn) return;
+    if (!AC || bgmOn) return;
     bgmOn = true;
     btnBgm.textContent = 'BGM ■';
-
+  
     const mkVoice = () => {
       const o = AC.createOscillator();
       const g = AC.createGain();
       o.type = 'square';
-      g.gain.value = 0.0;
+      g.gain.value = 0;
       o.connect(g).connect(AC.destination);
       o.start();
       return {o,g};
     };
-    const v1 = mkVoice(), v2 = mkVoice(), v3 = mkVoice();
+  
+    const v1 = mkVoice(); // melody
+    const v2 = mkVoice(); // bass
+    const v3 = mkVoice(); // harmony
     bgmNodes = [v1,v2,v3];
-
+  
     let idx = 0;
+  
     bgmTimer = setInterval(()=>{
-      const chord = SCORE[idx % SCORE.length];
-      idx++;
-
-      // ほんの少しアタック付ける
       const t = AC.currentTime;
-
-      const vols = [0.045, 0.040, 0.035];
-      chord.forEach((hz, i)=>{
+  
+      const notes = [MELO[idx%MELO.length], BASS[idx%BASS.length], HARM[idx%HARM.length]];
+      const vols = [0.06, 0.05, 0.04];
+  
+      notes.forEach((hz,i)=>{
         const v = bgmNodes[i];
         if (!hz){
-          v.g.gain.setTargetAtTime(0.0001, t, 0.02);
+          v.g.gain.setTargetAtTime(0.0001,t,0.02);
           return;
         }
-        v.o.frequency.setValueAtTime(hz, t);
+        v.o.frequency.setValueAtTime(hz,t);
         v.g.gain.cancelScheduledValues(t);
-        v.g.gain.setValueAtTime(0.0001, t);
-        v.g.gain.linearRampToValueAtTime(vols[i], t + 0.02);
-        v.g.gain.setTargetAtTime(0.0001, t + (STEP_MS/1000)*0.85, 0.03);
+        v.g.gain.setValueAtTime(0.0001,t);
+        v.g.gain.linearRampToValueAtTime(vols[i],t+0.02);
+        v.g.gain.setTargetAtTime(0.0001,t+0.16,0.05);
       });
+  
+      idx++;
     }, STEP_MS);
   }
+
 
   function stopBgm(){
     if (!bgmOn) return;
