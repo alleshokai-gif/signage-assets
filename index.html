@@ -365,8 +365,6 @@
       schedule:{ url: 'https://alleshokai-gif.github.io/signage-assets/schedule', auto:true, immersive:false }, // ★ここ
       game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan', auto:false, immersive:true },
     };
-    registerSubPages_(SUB, PAGES);
-    console.log('SUB after register:', SUB);
     
     // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxImsH4sWBlEbYaiEl4X7mUmAsuzr3j8hRJeg7Hlq6fXSQRh79XCGB8PoX7arfbPrnbXQ/exec';
@@ -694,6 +692,10 @@
         { label:'支出ランク', iconImg:'ICON_financeAmtR.png', url:'https://lookerstudio.google.com/embed/reporting/a9e7808d-828d-4c1f-8317-5adc3e44386f/page/p_4s4wd13m0d' },
       ],
     };
+
+    registerSubPages_(SUB, PAGES);
+    console.log('SUB after register:', SUB);
+    
     const ICON_BASE = 'https://alleshokai-gif.github.io/signage-assets/assets/icons/';
     // --- 子メニューDOM ---
     const subModal = document.getElementById('subModal');
