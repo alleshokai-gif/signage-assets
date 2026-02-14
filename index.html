@@ -99,7 +99,15 @@
       align-items:center;
       justify-content:center;
       z-index: 50;
-      pointer-events: auto;   /* ✅ これにする */
+      pointer-events: auto;
+    
+      transition: transform 260ms ease, opacity 260ms ease;
+    }
+    
+    #menuWrap.hidden{
+      transform: translateY(110%);
+      opacity: 0;
+      pointer-events: none;
     }
 
     /* メニューパネル（半透明の台座） */
@@ -341,15 +349,25 @@
   try {
     // ====== 兄弟：ここだけ差し替えたらOK ======
     // ※ Lookerの「埋め込みURL」推奨（/embed/reporting/...）
-    const PAGES = {
-      home:    { url: 'https://lookerstudio.google.com/embed/reporting/c3341ade-526b-4ef1-8f77-e04e885ccf81/page/p_7ie80j9qzd', auto:true },
-      temp:    { url: 'https://lookerstudio.google.com/embed/reporting/a9247f37-fc30-425b-a648-1c360e725914/page/p_2o3y60glyd', auto:true },
-      school:  { url: 'https://lookerstudio.google.com/embed/reporting/e56ad71b-8c4c-4a59-88fa-99e773c8809a/page/p_20w8aknpyd', auto:true },
-      finance: { url: 'https://lookerstudio.google.com/embed/reporting/27c09c89-3b08-46f8-bc49-db0d6e60c3fe/page/p_kbyrml84yd', auto:true },
-      schedule:{ url: 'https://alleshokai-gif.github.io/signage-assets/schedule', auto:true }, // ★ここ
-      game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan', auto:false },
+    const GROUP_DEFAULT = {
+      finance: { immersive:true },
+      game:    { immersive:true },
+      school:  { immersive:true },
+      temp:    { immersive:true },
+      schedule:{ immersive:true },
     };
 
+    const PAGES = {
+      home:    { url: 'https://lookerstudio.google.com/embed/reporting/c3341ade-526b-4ef1-8f77-e04e885ccf81/page/p_7ie80j9qzd', auto:true, immersive:false },
+      temp:    { url: 'https://lookerstudio.google.com/embed/reporting/a9247f37-fc30-425b-a648-1c360e725914/page/p_2o3y60glyd', auto:true, immersive:false },
+      school:  { url: 'https://lookerstudio.google.com/embed/reporting/e56ad71b-8c4c-4a59-88fa-99e773c8809a/page/p_20w8aknpyd', auto:true, immersive:false },
+      finance: { url: 'https://lookerstudio.google.com/embed/reporting/27c09c89-3b08-46f8-bc49-db0d6e60c3fe/page/p_kbyrml84yd', auto:true, immersive:false },
+      schedule:{ url: 'https://alleshokai-gif.github.io/signage-assets/schedule', auto:true, immersive:false }, // ★ここ
+      game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan', auto:false, immersive:true },
+    };
+    registerSubPages_(SUB, PAGES);
+    console.log('SUB after register:', SUB);
+    
     // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxImsH4sWBlEbYaiEl4X7mUmAsuzr3j8hRJeg7Hlq6fXSQRh79XCGB8PoX7arfbPrnbXQ/exec';
     const AUTO_ORDER = Object.keys(PAGES).filter(k => PAGES[k].auto);
@@ -492,6 +510,7 @@
       if (reason === 'manual') stopAuto();
 
       const url = PAGES[page].url;
+      const menuWrap = document.getElementById('menuWrap');
 
       setToast(`loading: ${page} (${reason})`);
       setMenuActive(page);
@@ -514,6 +533,13 @@
         resetIdleTimer();
 
         rtClock.style.display = (page === 'home') ? 'block' : 'none';
+
+        // ====== immersive制御 ======
+        if (PAGES[page].immersive){
+          menuWrap.classList.add('hidden');
+        } else {
+          menuWrap.classList.remove('hidden');
+        }
 
         // ====== 🔊 ここがトリガー：home表示確定で鳴らす ======
         if (page === 'home') {
@@ -674,7 +700,46 @@
     const subGrid  = document.getElementById('subGrid');
     const subTitle = document.getElementById('subTitle');
     const subClose = document.getElementById('subClose');
+
+    function slugify_(s){
+      return String(s || '')
+        .toLowerCase()
+        .replace(/\s+/g,'_')
+        .replace(/[\/\(\)（）]+/g,'_')
+        .replace(/[^a-z0-9_]+/g,'')
+        .replace(/_+/g,'_')
+        .replace(/^_|_$/g,'');
+    }
     
+    function registerSubPages_(SUB, PAGES){
+      Object.keys(SUB).forEach(group=>{
+        const def = GROUP_DEFAULT[group] || { immersive:false };
+    
+        SUB[group].forEach(it=>{
+          // すでに page 指定ならそれを使う（親ページでもOK）
+          if (it.page) return;
+    
+          // url 指定は pageKey を生成して PAGES へ登録、SUB は page に差し替え
+          if (it.url){
+            const key = `${group}_${slugify_(it.label) || 'item'}`;
+    
+            // 既に同じキーがあるなら連番（衝突回避）
+            let k = key, n = 2;
+            while (PAGES[k]) { k = `${key}_${n++}`; }
+    
+            PAGES[k] = {
+              url: it.url,
+              auto: false,
+              immersive: def.immersive,
+            };
+    
+            delete it.url;
+            it.page = k;
+          }
+        });
+      });
+    }
+
     function openSubMenu(parentKey){
       const items = SUB[parentKey];
       if (!items || !items.length) return;
