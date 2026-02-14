@@ -695,7 +695,15 @@
 
     registerSubPages_(SUB, PAGES);
     console.log('SUB after register:', SUB);
-    
+    console.log('SUB pages check:',
+      Object.fromEntries(Object.entries(SUB).map(([k, arr]) => [
+        k,
+        arr.map(x => ({ label: x.label, page: x.page, url: x.url }))
+      ]))
+    );
+    console.log('PAGES keys:', Object.keys(PAGES).sort());
+
+
     const ICON_BASE = 'https://alleshokai-gif.github.io/signage-assets/assets/icons/';
     // --- 子メニューDOM ---
     const subModal = document.getElementById('subModal');
