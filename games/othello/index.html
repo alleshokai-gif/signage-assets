@@ -1,1 +1,841 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1, user-scalable=no" />
+<title>FC Othello</title>
+<style>
+  :root{
+    --bg:#0b0f12;
+    --panel: rgba(255,255,255,.08);
+    --panel2: rgba(255,255,255,.12);
+    --txt: rgba(255,255,255,.92);
+    --muted: rgba(255,255,255,.65);
+    --accent: rgba(120,200,255,.95);
+    --warn: rgba(255,220,120,.95);
+
+    --tile: 66px;         /* 盤の1マスサイズ（画面で自動スケールされる） */
+    --gap: 14px;
+    --radius: 22px;
+  }
+
+  html,body{ height:100%; margin:0; background:var(--bg); color:var(--txt); overflow:hidden; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  button{ font:inherit; }
+
+  .wrap{
+    height:100%;
+    display:grid;
+    grid-template-columns: 1fr;
+    place-items:center;
+    padding: 18px;
+    gap: 14px;
+  }
+
+  .card{
+    width:min(940px, 98vw);
+    display:grid;
+    grid-template-columns: 1fr 360px;
+    gap: var(--gap);
+    align-items: stretch;
+  }
+
+  .boardPanel{
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 14px;
+    box-shadow: 0 14px 30px rgba(0,0,0,.45);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  canvas{
+    width:min(640px, 92vw);
+    height:auto;
+    border-radius: 18px;
+    touch-action: manipulation;
+    background: #0e4f2a;
+    box-shadow: inset 0 0 0 6px rgba(0,0,0,.35);
+  }
+
+  .side{
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 14px;
+    box-shadow: 0 14px 30px rgba(0,0,0,.45);
+    display:flex;
+    flex-direction:column;
+    gap: 12px;
+  }
+
+  .title{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 12px;
+    padding: 6px 4px 2px;
+  }
+
+  .title h1{
+    margin:0;
+    font-size: 22px;
+    letter-spacing:.06em;
+  }
+
+  .status{
+    background: rgba(0,0,0,.25);
+    border-radius: 16px;
+    padding: 10px 12px;
+    display:grid;
+    gap: 6px;
+  }
+  .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size: 16px;
+    color: var(--muted);
+  }
+  .row b{ color:var(--txt); font-size: 18px; }
+
+  .btnGrid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .btn{
+    border:0;
+    border-radius: 18px;
+    padding: 14px 12px;
+    background: var(--panel2);
+    color: var(--txt);
+    font-size: 18px;
+    font-weight: 700;
+    cursor:pointer;
+    box-shadow: 0 10px 22px rgba(0,0,0,.35);
+    user-select:none;
+  }
+  .btn:active{ transform: scale(0.98); }
+
+  .btn.primary{ background: rgba(120,200,255,.22); }
+  .btn.warn{ background: rgba(255,220,120,.18); }
+
+  .seg{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .seg button{
+    border:0;
+    border-radius: 16px;
+    padding: 10px 0;
+    background: rgba(255,255,255,.10);
+    color: var(--muted);
+    font-weight: 800;
+    cursor:pointer;
+  }
+  .seg button.on{
+    background: rgba(120,200,255,.22);
+    color: var(--txt);
+  }
+
+  .small{
+    font-size: 14px;
+    color: rgba(255,255,255,.70);
+    line-height:1.35;
+  }
+
+  .tog{
+    display:flex;
+    gap: 10px;
+    align-items:center;
+    justify-content:space-between;
+    background: rgba(255,255,255,.06);
+    border-radius: 16px;
+    padding: 10px 12px;
+  }
+  .tog label{ font-weight:800; }
+  .tog input{ width: 26px; height: 26px; }
+
+  @media (max-width: 980px){
+    .card{ grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="boardPanel">
+      <canvas id="cv" width="640" height="640"></canvas>
+    </div>
+
+    <div class="side">
+      <div class="title">
+        <h1>FC OTHELLO</h1>
+        <button id="btnBgm" class="btn primary" style="padding:10px 12px; font-size:16px;">BGM ▶</button>
+      </div>
+
+      <div class="status">
+        <div class="row"><span>手番</span><b id="turnTxt">あなた（黒）</b></div>
+        <div class="row"><span>黒</span><b id="bCnt">2</b></div>
+        <div class="row"><span>白</span><b id="wCnt">2</b></div>
+        <div class="row"><span>COM</span><b id="aiTxt">NORMAL</b></div>
+      </div>
+
+      <div class="btnGrid">
+        <button id="btnNew" class="btn warn">ニューゲーム</button>
+        <button id="btnHint" class="btn">ヒント</button>
+        <button id="btnPass" class="btn">パス</button>
+        <button id="btnUndo" class="btn">もどす</button>
+      </div>
+
+      <div class="tog">
+        <label>打てる場所表示</label>
+        <input id="chkMoves" type="checkbox" checked />
+      </div>
+
+      <div>
+        <div class="small" style="margin:6px 0 8px;">難易度</div>
+        <div class="seg">
+          <button data-ai="easy">EASY</button>
+          <button data-ai="normal" class="on">NORMAL</button>
+          <button data-ai="hard">HARD</button>
+        </div>
+      </div>
+
+      <div class="small">
+        ・盤タップだけでOK<br>
+        ・ヒント：おすすめ手をピカッと表示<br>
+        ・HARDは少し考える（端末次第）
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ====== 基本設定 ======
+  const N = 8;
+  const EMPTY = 0, BLACK = 1, WHITE = -1; // あなた=黒、COM=白
+  const DIRS = [
+    [-1,-1],[-1,0],[-1,1],
+    [0,-1],        [0,1],
+    [1,-1],[1,0],[1,1],
+  ];
+
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+
+  const turnTxt = document.getElementById('turnTxt');
+  const bCnt = document.getElementById('bCnt');
+  const wCnt = document.getElementById('wCnt');
+  const aiTxt = document.getElementById('aiTxt');
+
+  const btnNew = document.getElementById('btnNew');
+  const btnHint = document.getElementById('btnHint');
+  const btnPass = document.getElementById('btnPass');
+  const btnUndo = document.getElementById('btnUndo');
+  const chkMoves = document.getElementById('chkMoves');
+  const btnBgm = document.getElementById('btnBgm');
+  const segBtns = [...document.querySelectorAll('.seg button')];
+
+  // ====== 盤面・状態 ======
+  let board = makeBoard();
+  let turn = BLACK; // 黒から
+  let history = []; // undo用
+  let showMoves = true;
+  let aiLevel = 'normal';
+  let hintMove = null;
+  let lock = false; // COM思考中ロック
+
+  function makeBoard(){
+    const b = Array.from({length:N}, ()=>Array(N).fill(EMPTY));
+    b[3][3] = WHITE; b[3][4] = BLACK;
+    b[4][3] = BLACK; b[4][4] = WHITE;
+    return b;
+  }
+
+  function cloneBoard(b){
+    return b.map(r => r.slice());
+  }
+
+  function inside(r,c){ return r>=0 && r<N && c>=0 && c<N; }
+
+  function flipsForMove(b, r, c, color){
+    if (!inside(r,c) || b[r][c] !== EMPTY) return [];
+    const flips = [];
+    for (const [dr,dc] of DIRS){
+      let rr=r+dr, cc=c+dc;
+      const line=[];
+      while (inside(rr,cc) && b[rr][cc] === -color){
+        line.push([rr,cc]);
+        rr+=dr; cc+=dc;
+      }
+      if (line.length && inside(rr,cc) && b[rr][cc] === color){
+        flips.push(...line);
+      }
+    }
+    return flips;
+  }
+
+  function legalMoves(b, color){
+    const ms=[];
+    for (let r=0;r<N;r++){
+      for (let c=0;c<N;c++){
+        const f = flipsForMove(b,r,c,color);
+        if (f.length) ms.push({r,c, flips:f});
+      }
+    }
+    return ms;
+  }
+
+  function applyMove(b, move, color){
+    const nb = cloneBoard(b);
+    nb[move.r][move.c] = color;
+    for (const [rr,cc] of move.flips) nb[rr][cc] = color;
+    return nb;
+  }
+
+  function countPieces(b){
+    let black=0, white=0;
+    for (let r=0;r<N;r++){
+      for (let c=0;c<N;c++){
+        if (b[r][c]===BLACK) black++;
+        else if (b[r][c]===WHITE) white++;
+      }
+    }
+    return {black, white};
+  }
+
+  function gameOver(b){
+    return legalMoves(b, BLACK).length===0 && legalMoves(b, WHITE).length===0;
+  }
+
+  // ====== 評価（NORMAL/HARD用） ======
+  const WEIGHT = [
+    [120,-20, 20,  5,  5, 20,-20,120],
+    [-20,-40, -5, -5, -5, -5,-40,-20],
+    [ 20, -5, 15,  3,  3, 15, -5, 20],
+    [  5, -5,  3,  3,  3,  3, -5,  5],
+    [  5, -5,  3,  3,  3,  3, -5,  5],
+    [ 20, -5, 15,  3,  3, 15, -5, 20],
+    [-20,-40, -5, -5, -5, -5,-40,-20],
+    [120,-20, 20,  5,  5, 20,-20,120],
+  ];
+
+  function evalBoard(b, color){
+    // color視点のスコア（大きいほど有利）
+    let s = 0;
+    for (let r=0;r<N;r++){
+      for (let c=0;c<N;c++){
+        const v = b[r][c];
+        if (v === color) s += WEIGHT[r][c];
+        else if (v === -color) s -= WEIGHT[r][c];
+      }
+    }
+    // 可動性（打てる手の数）
+    const my = legalMoves(b, color).length;
+    const op = legalMoves(b, -color).length;
+    s += 5*(my - op);
+    return s;
+  }
+
+  // ====== AI ======
+  function pickAiMove(b){
+    const moves = legalMoves(b, WHITE);
+    if (!moves.length) return null;
+
+    if (aiLevel === 'easy'){
+      return moves[Math.floor(Math.random()*moves.length)];
+    }
+
+    if (aiLevel === 'normal'){
+      // 角優先 + 評価最大
+      let best = moves[0], bestS = -1e9;
+      for (const m of moves){
+        const nb = applyMove(b, m, WHITE);
+        let s = evalBoard(nb, WHITE);
+        // 角に打てるなら強めにボーナス
+        if ((m.r===0||m.r===7) && (m.c===0||m.c===7)) s += 200;
+        if (s > bestS){ bestS=s; best=m; }
+      }
+      return best;
+    }
+
+    // hard: minimax + alpha-beta
+    const DEPTH = 4; // 端末で重ければ3に
+    const res = alphabeta(b, DEPTH, -1e9, 1e9, true);
+    return res.move || moves[0];
+  }
+
+  function alphabeta(b, depth, alpha, beta, maximizing){
+    // maximizing: WHITEの番（AI）
+    const color = maximizing ? WHITE : BLACK;
+    const moves = legalMoves(b, color);
+
+    if (depth === 0 || gameOver(b)){
+      return { score: evalBoard(b, WHITE), move: null };
+    }
+
+    // パス処理
+    if (!moves.length){
+      // 相手に手番を渡す
+      const r = alphabeta(b, depth-1, alpha, beta, !maximizing);
+      return { score: r.score, move: null };
+    }
+
+    let bestMove = null;
+
+    if (maximizing){
+      let value = -1e9;
+      for (const m of moves){
+        const nb = applyMove(b, m, color);
+        const r = alphabeta(nb, depth-1, alpha, beta, false);
+        if (r.score > value){
+          value = r.score;
+          bestMove = m;
+        }
+        alpha = Math.max(alpha, value);
+        if (alpha >= beta) break;
+      }
+      return { score: value, move: bestMove };
+    } else {
+      let value = 1e9;
+      for (const m of moves){
+        const nb = applyMove(b, m, color);
+        const r = alphabeta(nb, depth-1, alpha, beta, true);
+        if (r.score < value){
+          value = r.score;
+          bestMove = m;
+        }
+        beta = Math.min(beta, value);
+        if (alpha >= beta) break;
+      }
+      return { score: value, move: bestMove };
+    }
+  }
+
+  function pickHintMove(){
+    const moves = legalMoves(board, BLACK);
+    if (!moves.length) return null;
+    // あなた目線で良い手：角優先 + 評価
+    let best = moves[0], bestS = -1e9;
+    for (const m of moves){
+      const nb = applyMove(board, m, BLACK);
+      let s = evalBoard(nb, BLACK);
+      if ((m.r===0||m.r===7) && (m.c===0||m.c===7)) s += 200;
+      if (s > bestS){ bestS=s; best=m; }
+    }
+    return best;
+  }
+
+  // ====== 描画 ======
+  function draw(){
+    const size = cv.width;
+    const cell = size / N;
+
+    // 背景（FC風：少しグラデ）
+    const g = ctx.createLinearGradient(0,0,0,size);
+    g.addColorStop(0,'#116a3a');
+    g.addColorStop(1,'#0b4a28');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,size,size);
+
+    // グリッド
+    ctx.strokeStyle = 'rgba(0,0,0,.45)';
+    ctx.lineWidth = 2;
+    for (let i=0;i<=N;i++){
+      ctx.beginPath(); ctx.moveTo(i*cell,0); ctx.lineTo(i*cell,size); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,i*cell); ctx.lineTo(size,i*cell); ctx.stroke();
+    }
+
+    // 置ける場所（薄いドット）
+    const moves = legalMoves(board, turn);
+    if (showMoves && moves.length){
+      for (const m of moves){
+        ctx.fillStyle = 'rgba(255,255,255,.20)';
+        ctx.beginPath();
+        ctx.arc((m.c+0.5)*cell, (m.r+0.5)*cell, cell*0.10, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // ヒント点滅
+    if (hintMove){
+      const t = Date.now();
+      const blink = (Math.floor(t/250)%2)===0;
+      if (blink){
+        ctx.strokeStyle = 'rgba(255,220,120,.85)';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc((hintMove.c+0.5)*cell, (hintMove.r+0.5)*cell, cell*0.30, 0, Math.PI*2);
+        ctx.stroke();
+      }
+    }
+
+    // コマ
+    for (let r=0;r<N;r++){
+      for (let c=0;c<N;c++){
+        const v = board[r][c];
+        if (v === EMPTY) continue;
+
+        const x = (c+0.5)*cell;
+        const y = (r+0.5)*cell;
+        const rad = cell*0.38;
+
+        // 影
+        ctx.fillStyle = 'rgba(0,0,0,.35)';
+        ctx.beginPath(); ctx.arc(x+3,y+4,rad,0,Math.PI*2); ctx.fill();
+
+        // コマ本体（FC風：少し立体）
+        const gg = ctx.createRadialGradient(x-rad*0.2, y-rad*0.2, rad*0.2, x, y, rad);
+        if (v === BLACK){
+          gg.addColorStop(0,'#444');
+          gg.addColorStop(1,'#070707');
+        } else {
+          gg.addColorStop(0,'#ffffff');
+          gg.addColorStop(1,'#cfd6de');
+        }
+        ctx.fillStyle = gg;
+        ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); ctx.fill();
+
+        ctx.strokeStyle = 'rgba(0,0,0,.35)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); ctx.stroke();
+      }
+    }
+  }
+
+  // ====== UI更新 ======
+  function updateStatus(){
+    const {black, white} = countPieces(board);
+    bCnt.textContent = black;
+    wCnt.textContent = white;
+    aiTxt.textContent = aiLevel.toUpperCase();
+
+    if (turn === BLACK) turnTxt.textContent = 'あなた（黒）';
+    else turnTxt.textContent = 'COM（白）';
+
+    // パス可否
+    btnPass.disabled = lock;
+    btnHint.disabled = lock;
+    btnUndo.disabled = history.length === 0 || lock;
+
+    draw();
+  }
+
+  // ====== 入力（タップのみ） ======
+  function cellFromEvent(ev){
+    const rect = cv.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * (cv.width / rect.width);
+    const y = (ev.clientY - rect.top) * (cv.height / rect.height);
+    const cell = cv.width / N;
+    const c = Math.floor(x / cell);
+    const r = Math.floor(y / cell);
+    return {r,c};
+  }
+
+  cv.addEventListener('pointerdown', async (ev)=>{
+    if (lock) return;
+    if (turn !== BLACK) return;
+
+    const {r,c} = cellFromEvent(ev);
+    const f = flipsForMove(board, r, c, BLACK);
+    if (!f.length){
+      sfxBad();
+      return;
+    }
+
+    // 手を適用
+    history.push({board: cloneBoard(board), turn});
+    hintMove = null;
+
+    board[r][c] = BLACK;
+    for (const [rr,cc] of f) board[rr][cc] = BLACK;
+    sfxPlace();
+
+    // 手番交代
+    turn = WHITE;
+    updateStatus();
+
+    await maybeAiTurn();
+  });
+
+  async function maybeAiTurn(){
+    if (gameOver(board)){
+      endGame();
+      return;
+    }
+
+    // AIが打てる？
+    const aiMoves = legalMoves(board, WHITE);
+    if (!aiMoves.length){
+      // AIパス
+      sfxPass();
+      turn = BLACK;
+      updateStatus();
+
+      // 人も打てないなら終了
+      if (!legalMoves(board, BLACK).length) endGame();
+      return;
+    }
+
+    lock = true;
+    updateStatus();
+
+    // “ファミコンの間”を演出
+    await sleep(aiLevel==='hard' ? 450 : 260);
+
+    const move = pickAiMove(board);
+    if (!move){
+      lock = false;
+      return;
+    }
+
+    history.push({board: cloneBoard(board), turn}); // undo用（AI手も戻せる）
+    board = applyMove(board, move, WHITE);
+    sfxPlace2();
+
+    turn = BLACK;
+    lock = false;
+    updateStatus();
+
+    // 人が打てないならパス
+    if (!legalMoves(board, BLACK).length){
+      sfxPass();
+      turn = WHITE;
+      updateStatus();
+      await maybeAiTurn();
+    }
+  }
+
+  function endGame(){
+    const {black, white} = countPieces(board);
+    let msg = '';
+    if (black > white) msg = 'あなたの勝ち！';
+    else if (black < white) msg = 'COMの勝ち…';
+    else msg = '引き分け！';
+
+    sfxWin(black>white);
+    alert(`ゲーム終了\n黒 ${black} / 白 ${white}\n${msg}`);
+  }
+
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+  // ====== ボタン ======
+  btnNew.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    if (lock) return;
+    board = makeBoard();
+    turn = BLACK;
+    history = [];
+    hintMove = null;
+    sfxStart();
+    updateStatus();
+  });
+
+  btnHint.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    if (lock) return;
+    if (turn !== BLACK) return;
+    const hm = pickHintMove();
+    if (!hm){ sfxBad(); return; }
+    hintMove = hm;
+    sfxHint();
+    updateStatus();
+    // 3秒でヒント消す
+    setTimeout(()=>{ hintMove=null; updateStatus(); }, 3000);
+  });
+
+  btnPass.addEventListener('pointerdown', async (e)=>{
+    e.preventDefault();
+    if (lock) return;
+
+    const ms = legalMoves(board, turn);
+    if (ms.length){
+      // 打てるのにパスは不可（FCっぽく拒否）
+      sfxBad();
+      return;
+    }
+    sfxPass();
+
+    turn = -turn;
+    updateStatus();
+
+    if (turn === WHITE) await maybeAiTurn();
+    else {
+      if (!legalMoves(board, BLACK).length && !legalMoves(board, WHITE).length) endGame();
+    }
+  });
+
+  btnUndo.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    if (lock) return;
+    if (!history.length) return;
+    const last = history.pop();
+    board = last.board;
+    turn = last.turn;
+    hintMove = null;
+    sfxUndo();
+    updateStatus();
+  });
+
+  chkMoves.addEventListener('change', ()=>{
+    showMoves = chkMoves.checked;
+    updateStatus();
+  });
+
+  segBtns.forEach(b=>{
+    b.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      if (lock) return;
+      segBtns.forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      aiLevel = b.dataset.ai;
+      updateStatus();
+      sfxMenu();
+    });
+  });
+
+  // ====== FC風サウンド（3和音BGM + 効果音） ======
+  let AC = null;
+  let bgmOn = false;
+  let bgmNodes = null;
+  let bgmTimer = null;
+
+  function ensureAudio(){
+    if (AC) return;
+    const A = window.AudioContext || window.webkitAudioContext;
+    if (!A) return;
+    AC = new A();
+  }
+
+  function tone(freq, ms=80, type='square', vol=0.08){
+    if (!AC) return;
+    const t0 = AC.currentTime;
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms/1000);
+    o.connect(g).connect(AC.destination);
+    o.start(t0);
+    o.stop(t0 + ms/1000 + 0.02);
+  }
+
+  function sfxMenu(){ ensureAudio(); tone(880, 40, 'square', 0.06); }
+  function sfxPlace(){ ensureAudio(); tone(660, 55, 'square', 0.07); }
+  function sfxPlace2(){ ensureAudio(); tone(523.25, 55, 'square', 0.07); }
+  function sfxBad(){ ensureAudio(); tone(160, 120, 'sawtooth', 0.10); }
+  function sfxPass(){ ensureAudio(); tone(392, 60, 'square', 0.06); setTimeout(()=>tone(330, 80, 'square', 0.06), 60); }
+  function sfxHint(){ ensureAudio(); tone(988, 60, 'square', 0.06); setTimeout(()=>tone(1175, 90, 'square', 0.06), 70); }
+  function sfxUndo(){ ensureAudio(); tone(294, 60, 'square', 0.06); }
+  function sfxStart(){ ensureAudio(); tone(784, 90, 'square', 0.07); setTimeout(()=>tone(988, 120, 'square', 0.07), 90); }
+  function sfxWin(win){
+    ensureAudio();
+    if (win){
+      tone(523, 120,'square',0.08);
+      setTimeout(()=>tone(659, 120,'square',0.08), 120);
+      setTimeout(()=>tone(784, 180,'square',0.08), 240);
+    } else {
+      tone(262, 160,'sawtooth',0.09);
+      setTimeout(()=>tone(196, 220,'sawtooth',0.09), 180);
+    }
+  }
+
+  // 3和音BGM（ファミコンっぽい短いループ）
+  const SCORE = [
+    // [root, third, fifth] (Hz) / 0は休符
+    [392, 494, 588], [392, 494, 588], [440, 554, 659], [392, 494, 588],
+    [330, 415, 494], [330, 415, 494], [349, 440, 523], [330, 415, 494],
+    [294, 370, 440], [294, 370, 440], [330, 415, 494], [294, 370, 440],
+    [262, 330, 392], [262, 330, 392], [294, 370, 440], [262, 330, 392],
+  ];
+  const STEP_MS = 180;
+
+  function startBgm(){
+    ensureAudio();
+    if (!AC) return;
+    if (bgmOn) return;
+    bgmOn = true;
+    btnBgm.textContent = 'BGM ■';
+
+    const mkVoice = () => {
+      const o = AC.createOscillator();
+      const g = AC.createGain();
+      o.type = 'square';
+      g.gain.value = 0.0;
+      o.connect(g).connect(AC.destination);
+      o.start();
+      return {o,g};
+    };
+    const v1 = mkVoice(), v2 = mkVoice(), v3 = mkVoice();
+    bgmNodes = [v1,v2,v3];
+
+    let idx = 0;
+    bgmTimer = setInterval(()=>{
+      const chord = SCORE[idx % SCORE.length];
+      idx++;
+
+      // ほんの少しアタック付ける
+      const t = AC.currentTime;
+
+      const vols = [0.045, 0.040, 0.035];
+      chord.forEach((hz, i)=>{
+        const v = bgmNodes[i];
+        if (!hz){
+          v.g.gain.setTargetAtTime(0.0001, t, 0.02);
+          return;
+        }
+        v.o.frequency.setValueAtTime(hz, t);
+        v.g.gain.cancelScheduledValues(t);
+        v.g.gain.setValueAtTime(0.0001, t);
+        v.g.gain.linearRampToValueAtTime(vols[i], t + 0.02);
+        v.g.gain.setTargetAtTime(0.0001, t + (STEP_MS/1000)*0.85, 0.03);
+      });
+    }, STEP_MS);
+  }
+
+  function stopBgm(){
+    if (!bgmOn) return;
+    bgmOn = false;
+    btnBgm.textContent = 'BGM ▶';
+    if (bgmTimer) clearInterval(bgmTimer);
+    bgmTimer = null;
+    if (bgmNodes){
+      const t = AC ? AC.currentTime : 0;
+      bgmNodes.forEach(v=>{
+        try{
+          v.g.gain.setTargetAtTime(0.0001, t, 0.02);
+          v.o.stop(t + 0.05);
+        }catch(_){}
+      });
+    }
+    bgmNodes = null;
+  }
+
+  btnBgm.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    // ブラウザの制限対策：最初のタップでAudioContext起動
+    ensureAudio();
+    if (!AC) return;
+    if (AC.state === 'suspended') AC.resume();
+
+    if (bgmOn) stopBgm();
+    else startBgm();
+    sfxMenu();
+  });
+
+  // ===== 初期描画 =====
+  updateStatus();
+  draw();
+})();
+</script>
+</body>
+</html>
+
 
