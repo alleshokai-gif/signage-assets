@@ -540,6 +540,33 @@
       // 遷移
       view.src = url;
     }
+    
+    function navigateUrl(url, parentKey, { reason='manual' } = {}){
+      if (reason === 'manual') stopAuto();
+    
+      // 遷移開始で時計は消す（home以外）
+      rtClock.style.display = 'none';
+    
+      setMenuActive(parentKey);
+    
+      view.onload = null;
+      const myToken = ++navToken;
+    
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        if (myToken !== navToken) return;
+        settled = true;
+    
+        currentPage = parentKey;
+        resetIdleTimer();
+      };
+    
+      const fb = setTimeout(settle, 2500);
+      view.onload = () => { clearTimeout(fb); settle(); };
+    
+      view.src = url;
+    }
 
     // ====== auto rotate ======
     function startAuto(){
@@ -673,18 +700,19 @@
         
         b.appendChild(label);
 
-      
         // クリック処理（既存そのまま）
         b.addEventListener('pointerdown', (e)=>{
           e.preventDefault();
           sfxUnlock(); sfxMenu();
+          stopAuto();                // ★ これ追加（サブメニューは navigate 通らんから）
+          // ついでに時計は即消す（後述）
+          rtClock.style.display = 'none';  // ★ これも追加
       
           if (it.page){
             navigate(it.page, { reason:'manual' });
           } else if (it.url){
-            view.src = it.url;
-          }
-      
+            navigateUrl(it.url, parentKey, { reason:'manual' });
+          }      
           closeSubMenu();
         });
       
