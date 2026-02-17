@@ -48,8 +48,8 @@
       top: 18px;
       left: 0; right: 0;
       display: none;
-      z-index: 80;
-      pointer-events: none;
+      z-index: 120;
+      pointer-events: auto;
       text-align: center;
       color: rgba(255,255,255,.92);
       text-shadow: 0 6px 18px rgba(0,0,0,.55);
@@ -425,6 +425,93 @@
     let autoEnabled = true;
 
     let idleTimer = null;
+
+    // ===== TTS (Zundamon) =====
+    const CLOCK_VOICE_BASE = 'assets/voice_clock/';
+
+    let clockPlaying = false;
+
+    async function playClockQueue(keys){
+      if (clockPlaying) return;         // 連打でぐちゃぐちゃ防止
+      clockPlaying = true;
+      try{
+        for (const k of keys){
+          await playClockOne(k);        // ← ここで [CLOCK TRY] が必ず出る
+        }
+      } finally {
+        clockPlaying = false;
+      }
+    }
+
+    rtClock.addEventListener('pointerdown', (e)=>{
+      console.log('CLOCKTAP7');
+      e.preventDefault();
+      e.stopPropagation();
+      try{
+        speakClockNow();
+      }catch(err){
+        console.error('speakClockNow failed', err);
+      }
+    }, true);
+
+    function speakClockNow(){
+      const d = new Date();
+      const h24 = d.getHours();
+      const m   = d.getMinutes();
+
+      const keys = [];
+
+      // ===== 時間帯分岐 =====
+      if (h24 > 21 || (h24 === 21 && m >= 30)) {
+        keys.push('NERO');
+      }
+      else if (h24 >= 6 && h24 <= 8) {
+        keys.push('OHA');
+        keys.push(...getClockKeys(d));
+      }
+      else {
+        keys.push(...getClockKeys(d));
+      }
+
+      console.log('[CLOCK KEYS]', keys);
+      playClockQueue(keys);
+    }
+
+    function pad2(n){
+      return String(n).padStart(2,'0');
+    }
+
+    function getClockKeys(d){
+      const h24 = d.getHours();
+      const m = d.getMinutes();
+
+      const ap = (h24 < 12) ? 'AM' : 'PM';
+
+      const h12 = h24 % 12; // 0〜11
+      const hKey = 'H' + pad2(h12);
+
+      const mKey = 'M' + pad2(m);
+
+      return [ap, hKey, mKey];
+    }
+
+    function playClockOne(key){
+      return new Promise(resolve=>{
+        const url = CLOCK_VOICE_BASE + key + '.wav';
+        console.log('[CLOCK TRY]', url);
+
+        const a = new Audio(url);
+        a.onended = resolve;
+        a.onerror = ()=>{
+          console.log('❌ 404?', url);
+          resolve();
+        };
+        a.play().catch(err=>{
+          console.log('❌ play fail', url, err);
+          resolve();
+        });
+      });
+    }
 
     // ===== TTS (Zundamon) =====
     let _playing = false;
