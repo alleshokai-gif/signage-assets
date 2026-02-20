@@ -318,6 +318,21 @@
 
   <!-- デバッグ -->
   <div id="toast">boot...</div>
+  <div id="ttsTestBtn" class="dev-only" style="
+    position: fixed;
+    right: 16px;
+    bottom: 90px;
+    z-index: 9999;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.15);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,.25);
+    color: #fff;
+    font-weight: 700;
+  ">
+    TTSテスト
+  </div>
 
   <!-- メニュー（下部に重ね） -->
   <div id="menuWrap">
@@ -359,6 +374,16 @@
   try {
     // ====== 兄弟：ここだけ差し替えたらOK ======
     // ※ Lookerの「埋め込みURL」推奨（/embed/reporting/...）
+
+    const DEV_MODE = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!DEV_MODE) {
+        document.querySelectorAll('.dev-only')
+          .forEach(el => el.remove());
+      }
+    });
+
     const GROUP_DEFAULT = {
       finance: { immersive:true },
       game:    { immersive:true },
@@ -386,6 +411,7 @@
     const BOOT_HOLD_SEC = 120;     // 起動直後だけ長めに見せる
     const DEBUG = false;
     const VOICE_BASE =  'https://alleshokai-gif.github.io/signage-assets/assets/voice/';
+    const FLAME_GAS_URL = GAS_API_URL;
 
     // ====== DOM ======
     const view = document.getElementById('view');
@@ -580,6 +606,154 @@
       });
     }
 
+    function resolveBase_(base){
+      if (!base) return VOICE_BASE;
+      if (base === 'clock') return CLOCK_VOICE_BASE;
+      // もしURL直指定も許すなら：
+      if (String(base).startsWith('http')) return base;
+      return VOICE_BASE;
+    }
+
+    async function playTtsBase64(base64){
+      const audio = new Audio("data:audio/mpeg;base64," + base64);
+      audio.volume = 1.0;
+
+      try{
+        await audio.play();
+      }catch(err){
+        console.error('audio.play failed', err);
+        // ここに toast とか出してもええ
+      }
+
+      return new Promise(resolve=>{
+        audio.onended = resolve;
+        audio.onerror = resolve; // 失敗しても先へ進める
+      });
+    }
+
+    async function ttsTest(){
+      try{
+        setToast?.('TTS test: fetching...');
+
+        const url = GAS_API_URL + '?reason=tts_test&text=' + encodeURIComponent('ぺんおだよ！てすとだよ。');
+
+        const r = await fetch(url, { cache: 'no-store' });
+        const j = await r.json();
+
+        console.log('[TTS TEST RES]', j);
+
+        if (!j.ok) throw new Error(j.error || 'TTS not ok');
+        if (j.type !== 'tts') throw new Error('unexpected type: ' + j.type);
+        if (!j.audio) throw new Error('audio empty');
+
+        setToast?.('TTS test: playing');
+        playTtsBase64(j.audio);
+
+      }catch(err){
+        console.error('TTS test failed', err);
+        setToast?.('TTS test failed');
+      }
+    }
+
+    function playWav(key, base){
+      return new Promise(resolve=>{
+        const url = base + key + '.wav';
+        console.log('[WAV TRY]', { key, url });
+
+        const a = new Audio(url);
+        a.onended = resolve;
+        a.onerror = ()=>{ console.log('❌ 404?', url); resolve(); };
+
+        a.play().catch(err=>{
+          console.log('❌ play fail', url, err);
+          resolve();
+        });
+      });
+    }
+
+    async function playRadioQueue(items){
+      for(const it of items){
+
+        // ===== WAV =====
+        if(it.type === 'wav'){
+          const base =
+            (it.base === 'clock') ? CLOCK_VOICE_BASE :
+            (it.base) ? it.base :
+            VOICE_BASE;
+
+          await playWav(it.key, base);
+          await wait(180);
+          continue;
+        }
+
+        // ===== TTS =====
+        if(it.type === 'tts'){
+          const url = GAS_API_URL + '?text=' + encodeURIComponent(it.text || '');
+          const res = await fetch(url, { cache:'no-store' });
+          const j = await res.json();
+
+          if(j && j.ok && j.audio){
+            await playTtsBase64(j.audio);
+          }
+          await wait(180);
+          continue;
+        }
+      }
+    }
+
+    async function requestRadioItems(reason){
+      try{
+        const url = GAS_API_URL + '?reason=' + encodeURIComponent(reason || '');
+        console.log('[RADIO REQ]', url);
+
+        const r = await fetch(url, { cache:'no-store' });
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+
+        const j = await r.json();
+        console.log('[RADIO RES]', j);
+
+        console.log('[RADIO ITEMS]', (j.items||[]).map(x=>({type:x.type, speaker:x.speaker, key:x.key, text:(x.text||'').slice(0,20)})));
+
+        const items = (j && j.items) ? j.items : [];
+        if(!items.length) return;
+
+        await playRadioQueue(items);
+
+      }catch(err){
+        console.error('[RADIO FAIL]', err);
+      }
+    }
+
+    async function playMorningRadio(){
+
+      const todayWeather = "今日は晴れやで。最高気温は14ど。洗濯は外でいけそうや。";
+      const schoolInfo = "りおたん、今日は通常日。給食はカレーや。";
+
+      const queue = [
+        { type:'wav', key:'OHA', base: CLOCK_VOICE_BASE },
+
+        { type:'tts', text: todayWeather },
+
+        { type:'wav', key:'UMBRELLA_TODAY', base: VOICE_BASE },
+
+        { type:'tts', text: schoolInfo },
+
+        { type:'wav', key:'PEN', base: CLOCK_VOICE_BASE },
+      ];
+
+      await playRadioQueue(queue);
+    }
+
+    function wait(ms){
+      return new Promise(r=>setTimeout(r,ms));
+    }
+
+    document.getElementById('ttsTestBtn')?.addEventListener('pointerdown', async (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      await requestRadioItems('radio_test'); // ← flameGASがitems返すルート
+    }, true);
+
     // 放置復帰
     function resetIdleTimer(){
       if (idleTimer) clearTimeout(idleTimer);
@@ -660,7 +834,7 @@
           console.log('VOICE TRIGGER check', { page, reason, allow });
           if (allow) {
             setToast('VOICE TRIGGER');
-            requestVoiceQueue(reason);
+            requestRadioItems(reason);
           }
         }
       };
@@ -770,7 +944,7 @@
         // ✅ これが最強：確実に鳴る
         playQueue(['MORNING_SUMMARY']); // 何でもええ
         // もしくは GAS 呼び出し確認したいなら：
-        // requestVoiceQueue('manual');
+        // requestRadioItems('manual');
         return;
       }
 
@@ -944,8 +1118,19 @@
 
     resetIdleTimer();
 
-    const CLOCK_SPEAK_TIMES = ['06:55', '07:20', '07:40', '18:30', '21:00'];
-    const CLOCK_KEY_PREFIX = 'clockSpoke_'; // 二重防止
+    const CLOCK_SPEAK_TIMES = ['06:55','07:20','07:40','18:30','21:00'];
+    const CLOCK_KEY_PREFIX  = 'clockSpoke_';
+
+    function reasonByHm_(hm){
+      switch(hm){
+        case '06:55': return 'clock_0655';  // 朝ショート
+        case '07:20': return 'clock_0720';  // 朝フル
+        case '07:40': return 'clock_0740';  // 週明けだけ（ギア）
+        case '18:30': return 'clock_1830';  // 夜準備
+        case '21:00': return 'clock_2100';  // 夜最終
+        default:      return 'clock';
+      }
+    }
 
     function tickClockVoice(){
       const now = new Date();
@@ -953,20 +1138,14 @@
       const mm = String(now.getMinutes()).padStart(2,'0');
       const hm = `${hh}:${mm}`;
 
-      if (!CLOCK_SPEAK_TIMES.includes(hm)) return;
+      if(!CLOCK_SPEAK_TIMES.includes(hm)) return;
 
       const day = now.toISOString().slice(0,10);
       const key = `${CLOCK_KEY_PREFIX}${day}_${hm}`;
-      if (localStorage.getItem(key)) return;
-
+      if(localStorage.getItem(key)) return;
       localStorage.setItem(key, '1');
 
-      // ★ 7:40だけ専用reasonを投げる
-      if (hm === '07:40') {
-        requestVoiceQueue('clock_0740');   // ←週明け上履き・体操服用
-      } else {
-        requestVoiceQueue('clock');        // ←通常の朝・夜アナウンス
-      }
+      requestRadioItems(reasonByHm_(hm));
     }
 
     setInterval(tickClockVoice, 15 * 1000);
