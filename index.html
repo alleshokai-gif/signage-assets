@@ -1193,18 +1193,6 @@
       return times[0] || '-';
     }
 
-    // デバッグ：今の次の分を一時的に鳴らす対象に入れる
-    function injectNextMinuteOnce_(){
-      const now = new Date();
-      now.setMinutes(now.getMinutes()+1);
-      const hh = String(now.getHours()).padStart(2,'0');
-      const mm = String(now.getMinutes()).padStart(2,'0');
-      const t = `${hh}:${mm}`;
-      if (!CLOCK_SPEAK_TIMES.includes(t)) CLOCK_SPEAK_TIMES.push(t);
-      console.log('[DBG] injected', t);
-    }
-    injectNextMinuteOnce_();
-
     // ===== SFX (Web Audio) =====
     let _ac = null;
 
