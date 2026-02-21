@@ -334,6 +334,13 @@
     TTSテスト
   </div>
 
+  <div id="clockDebug" style="
+    position: fixed; right: 10px; bottom: 10px; z-index: 99999;
+    font-size: 12px; color: #fff; background: rgba(0,0,0,.45);
+    padding: 6px 8px; border-radius: 8px;">
+    clock: -
+  </div>
+
   <!-- メニュー（下部に重ね） -->
   <div id="menuWrap">
     <div id="menu" aria-label="menu">
@@ -1139,17 +1146,29 @@
       return `${y}-${m}-${day}`;
     }
 
+    let __lastHM = '';
+
     function tickClockVoice(){
       const now = new Date();
       const hh = String(now.getHours()).padStart(2,'0');
       const mm = String(now.getMinutes()).padStart(2,'0');
       const hm = `${hh}:${mm}`;
 
+      const el = document.getElementById('clockDebug');
+      if (el) el.textContent = `clock: ${hm} (${now.toLocaleTimeString()})`;
+      
+      // ★同じ分は1回だけ（取りこぼし防止のコア）
+      if (hm === __lastHM) return;
+      __lastHM = hm;
+
       console.log('[tickClockVoice]', { now: now.toString(), hm });
 
-      if (!CLOCK_SPEAK_TIMES.includes(hm)) return;
+      if (!CLOCK_SPEAK_TIMES.includes(hm)) {
+        console.log('[tickClockVoice] not in CLOCK_SPEAK_TIMES', hm);
+        return;
+      }
 
-      const day = ymdLocal_(now);               // ★ここが修正点
+      const day = ymdLocal_(now);
       const key = `${CLOCK_KEY_PREFIX}${day}_${hm}`;
 
       if (localStorage.getItem(key)) {
@@ -1158,12 +1177,12 @@
       }
       localStorage.setItem(key, '1');
 
-      if (hm === '07:40') requestRadioItems('clock_0740');
-      else requestRadioItems('clock');
+      requestRadioItems(hm === '07:40' ? 'clock_0740' : 'clock');
     }
 
     console.log('[BOOT] start clock loop', new Date().toString());
-    setInterval(tickClockVoice, 15 * 1000); // いったん15秒でデバッグ（あとで60秒に戻す）
+    setInterval(tickClockVoice, 5 * 1000); // ★15秒→5秒推奨（分変化ガードあるから軽い）
+    tickClockVoice(); // ★起動直後に1回
 
     // ===== SFX (Web Audio) =====
     let _ac = null;
