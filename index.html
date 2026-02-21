@@ -1155,8 +1155,11 @@
       const hm = `${hh}:${mm}`;
 
       const el = document.getElementById('clockDebug');
-      if (el) el.textContent = `clock: ${hm} (${now.toLocaleTimeString()})`;
-      
+      if (el) {
+        const next = nextSpeakHm_(hm);
+        el.textContent = `clock:${hm} (${now.toLocaleTimeString()}) next:${next}`;
+      }
+
       // ★同じ分は1回だけ（取りこぼし防止のコア）
       if (hm === __lastHM) return;
       __lastHM = hm;
@@ -1183,6 +1186,12 @@
     console.log('[BOOT] start clock loop', new Date().toString());
     setInterval(tickClockVoice, 5 * 1000); // ★15秒→5秒推奨（分変化ガードあるから軽い）
     tickClockVoice(); // ★起動直後に1回
+
+    function nextSpeakHm_(hmNow){
+      const times = CLOCK_SPEAK_TIMES.slice().sort(); // "06:55"みたいな文字列想定
+      for (const t of times) if (t > hmNow) return t;
+      return times[0] || '-';
+    }
 
     // ===== SFX (Web Audio) =====
     let _ac = null;
