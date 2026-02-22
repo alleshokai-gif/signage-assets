@@ -841,7 +841,7 @@
           console.log('VOICE TRIGGER check', { page, reason, allow });
           if (allow) {
             setToast('VOICE TRIGGER');
-            requestRadioItems(reason);
+            requestRadioItems('home'); // ★ここを固定にする
           }
         }
       };
