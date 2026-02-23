@@ -1160,27 +1160,40 @@
         el.textContent = `clock:${hm} (${now.toLocaleTimeString()}) next:${next}`;
       }
 
-      // ★同じ分は1回だけ（取りこぼし防止のコア）
+      // ★同じ分は1回だけ（同一ループ内の多重呼び出し対策）
       if (hm === __lastHM) return;
       __lastHM = hm;
 
       console.log('[tickClockVoice]', { now: now.toString(), hm });
 
-      if (!CLOCK_SPEAK_TIMES.includes(hm)) {
-        console.log('[tickClockVoice] not in CLOCK_SPEAK_TIMES', hm);
+      // ★対象時刻以外は無視
+      if (!CLOCK_SPEAK_TIMES.includes(hm)) return;
+
+      // ★追加：直近発火クールダウン（例：45秒）
+      const cooldownMs = 45 * 1000;
+      const last = Number(localStorage.getItem('CLOCK_LAST_FIRE_MS') || 0);
+      const diff = Date.now() - last;
+      if (diff >= 0 && diff < cooldownMs) {
+        console.log('[tickClockVoice] skipped by cooldown', { hm, diff });
         return;
       }
 
       const day = ymdLocal_(now);
       const key = `${CLOCK_KEY_PREFIX}${day}_${hm}`;
 
+      // ★同一日・同一時刻は1回だけ（端末の再読込や二重起動対策）
       if (localStorage.getItem(key)) {
         console.log('[tickClockVoice] skipped by localStorage', key);
         return;
       }
-      localStorage.setItem(key, '1');
 
-      requestRadioItems(hm === '07:40' ? 'clock_0740' : 'clock');
+      // ★先に書く（発火前にガードを立てる）
+      localStorage.setItem(key, '1');
+      localStorage.setItem('CLOCK_LAST_FIRE_MS', String(Date.now()));
+
+      // ★ここが重要：hmに応じたreasonを投げる
+      const reason = reasonByHm_(hm);
+      requestRadioItems(reason);
     }
 
     console.log('[BOOT] start clock loop', new Date().toString());
