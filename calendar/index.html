@@ -35,11 +35,6 @@ body{
   background:var(--bg);
   color:var(--text);
 }
-
-/* 埋め込みモード（?embed=1）でヘッダー隠す */
-body.embed header{ display:none; }
-body.embed #nowBar{ border-top:none; }
-
 header{
   position:sticky; top:0; z-index:10;
   background:rgba(17,24,35,.92);
@@ -396,14 +391,6 @@ const TZ_OFFSET = "+09:00";
 // 行数（固定高さなので増やしても枠は伸びない。多いと見切れる→+n運用）
 const MAX_MONTH_EVENTS = 3;
 const MAX_WEEK_EVENTS  = 5;
-
-/**
- * ========= 埋め込み判定 =========
- */
-const params = new URLSearchParams(location.search);
-if (params.get("embed") === "1" || (window.self !== window.top)) {
-  document.body.classList.add("embed");
-}
 
 /**
  * ========= JSONP =========
