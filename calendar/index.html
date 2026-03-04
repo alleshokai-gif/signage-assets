@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Schedule</title>
+<style>
+:root{
+  /* existing... */
+  --bg:#0b0f14;
+  --panel:#111823;
+  --text:#e8eef7;
+  --muted:#9fb0c7;
+  --line:#2a3a52; /* ←これくらいに上げる（好みで） */
+  --accent:#3aa0ff;
+  /* 透明白をやめて“実色”で締める */
+  --panel2:#0f172a;   /* panelの一段濃い/浅い調整用 */
+  --chipBg:#1e293b;   /* くすまないチップ背景 */
+  --chipBd:#334155;   /* くすまない枠 */
+  --softBd:#243244;   /* 今のlineより少し明るめ */
+  --glass: #111a26;   /* modal/バー用の濁らない面 */
+
+  /* ほんのり色（背景となじむやつ） */
+  --sat: rgba(80,140,255,0.10);
+  --sun: rgba(255,110,110,0.10);
+  --hol: rgba(255,190,90,0.11);
+
+  --modal: rgba(0,0,0,0.55);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* 埋め込みモード（?embed=1）でヘッダー隠す */
+body.embed header{ display:none; }
+body.embed #nowBar{ border-top:none; }
+
+header{
+  position:sticky; top:0; z-index:10;
+  background:rgba(17,24,35,.92);
+  border-bottom:1px solid var(--line);
+  padding:10px 12px;
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:space-between;
+}
+.left,.right{display:flex; gap:8px; align-items:center;}
+.btn{
+  background:var(--panel);
+  border:1px solid var(--line);
+  color:var(--text);
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:14px;
+  cursor:pointer;
+  user-select:none;
+}
+.btn.active{border-color:var(--accent);}
+.title{min-width:160px;text-align:center;font-weight:800;}
+
+#nowBar{
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  background:#16202f;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  font-size:14px;
+}
+.chip{
+  background: var(--chipBg);
+  border: 1px solid var(--chipBd);
+  padding:6px 10px;
+  border-radius:5px;
+  white-space:nowrap;
+}
+.chip b{color:var(--text)}
+.muted{color:var(--muted)}
+
+main{padding:12px;}
+.hidden{display:none}
+
+/* Month grid */
+.month{
+  display:grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap:0;                       /* ★これ */
+  border-left:1px solid var(--line);
+  border-top:1px solid var(--line);
+  border-right:1px solid var(--line);   /* ★これ追加 */
+  border-bottom:1px solid var(--line);  /* ついでに下も */
+  border-radius:5px;
+  overflow:hidden;             /* 角丸を効かせる */
+}
+.dow{
+  padding:6px 8px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  background: var(--panel);      /* ★ここ */
+  border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  font-size:12px;
+  opacity:.7;
+}
+.dow:last-child{
+  border-right:none;
+}
+.cell{
+  background: transparent;     /* ★面を消す */
+  border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  border-radius:0;             /* マトリクスだから角丸不要 */
+  padding:8px;
+  height:120px;
+  overflow:hidden;        /* ★はみ出し隠す */
+  cursor:pointer;
+}
+.cell:nth-child(7n){
+  border-right:none;
+}
+.cell.today{
+  outline:none;
+  box-shadow: inset 0 0 0 2px rgba(58,160,255,.7),
+  0 0 14px rgba(58,160,255,.15);
+}
+.cell.dim{
+  opacity:1;  /* 0.45だと“くすみ”になるので透明で処理 */
+  background: rgba(255,255,255,.03); /* ★薄い膜 */
+}
+.day span:first-child{
+  font-weight: 900;
+  font-size: 14px;
+  color: rgba(232,238,247,.92);
+}
+.cell.sun .day span:first-child{ color:#ff4d4d; }   /* 日曜 赤 */
+.cell.sat .day span:first-child{ color:#3aa0ff; }   /* 土曜 青 */
+.cell.hol .day span:first-child{ color:#ffc857; }   /* 祝日 黄（好みで白でもOK） */
+.day{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:6px;
+  color:var(--muted);
+  font-size:12px;
+}
+.day{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.day .badges{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  min-width: 80px;     /* 右端がガタつくの防止 */
+}
+
+.badgeTrash{
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  opacity: .85;
+  font-size: 12px;
+}
+
+.badgeHol{
+  font-size:12px;
+  opacity:.8;
+  white-space:nowrap;
+}
+.items{display:flex; flex-direction:column; gap:4px;}
+.item{
+  border-radius:5px;                 /* ★浅く */
+  padding:4px 6px;
+  font-size:12.5px;
+  background: var(--panel);          /* ★いまのセル色に寄せる */
+
+  box-shadow:none;                   /* 影は不要（マトリクスに合う） */
+}
+.more{
+  font-size:12px;
+  opacity:.75;
+  padding-left:6px;
+}
+
+/* =========================
+   Family week table (matrix style)
+   ========================= */
+
+/* 外枠だけ */
+.weekTable{
+  width:100%;
+  table-layout:fixed;
+  border-collapse:separate;
+  border-spacing:0;
+  overflow:hidden;
+
+  border:1px solid var(--line);
+  border-radius:5px;
+
+  background: transparent; /* ★面を消す */
+}
+
+/* 全セル：面なし + 右/下だけ線 */
+.weekTable th,
+.weekTable td{
+  background: transparent;
+  border:0;
+  border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  padding:6px 8px;
+  vertical-align:top;
+}
+
+/* 右端・最下段は外枠に任せる */
+.weekTable th:last-child,
+.weekTable td:last-child{ border-right:none; }
+.weekTable tr:last-child td{ border-bottom:none; }
+
+/* 横見出し（曜日/日付）：薄い面（＝修正前のセル背景） */
+.weekTable th{
+  height:34px;
+  line-height:1.1;
+  padding:6px 8px;
+  vertical-align:middle;
+  font-size:13px;
+  font-weight:900;
+  color:rgba(232,238,247,.78);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+
+  background: var(--panel);  /* ★ここが「修正前セル背景」枠 */
+}
+/* 本体セルの高さを固定（ここが本丸） */
+.weekTable td{
+  height:74px;          /* 好みで 56〜74 */
+  padding:6px 8px;
+  vertical-align:top;
+  overflow:hidden;      /* はみ出し隠す */
+}
+/* 縦見出し（人名）：薄い面（同じで統一） */
+.weekTable .person{
+  width:84px;
+  font-weight:900;
+  color:rgba(232,238,247,.72);
+  background: var(--panel);  /* ★縦見出しも面 */
+}
+
+/* 予定（アイテム）：今のセル色（＝旧panelのもう一段濃い感じ） */
+.weekTable .item{
+  margin-top:4px;
+  padding:4px 6px;
+  border-radius:5px; /* 浅い角丸 */
+  font-size:12.5px;
+  line-height:1.15;
+
+  background:#0d141f; /* ★月次の「セル面を消した後の空気」に合わせた濃色 */
+
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+
+.weekTable .more{
+  margin-top:4px;
+  font-size:12px;
+  opacity:.75;
+}
+
+/* 土日祝：セルは同じ（面なし）、文字だけビビッド */
+.weekTable th.thSun{ color:#ff4d4d; }
+.weekTable th.thSat{ color:#3aa0ff; }
+.weekTable th.thHol{ color:#ffc857; }
+
+/* 今日の列：列まるっとほんのり発光（枠＋薄い膜） */
+.weekTable th.todayCol,
+.weekTable td.todayCol{
+  box-shadow:none; /* ★これで“セルごとの発光”を止める */
+  border-left:2px solid rgba(58,160,255,.65);
+  border-right:2px solid rgba(58,160,255,.65);
+}
+.weekTable th.todayCol{
+  border-top:2px solid rgba(58,160,255,.65);
+}
+.weekTable tr:last-child td.todayCol{
+  border-bottom:2px solid rgba(58,160,255,.65);
+}
+/* Modal */
+.modal{
+  position:fixed; inset:0;
+  display:none;
+  align-items:center; justify-content:center;
+  background:var(--modal);
+  z-index:999;
+}
+.modalBox{
+  width:min(560px, 92vw);
+  max-height:80vh;
+  overflow:auto;
+  background: #141b26;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:16px;
+  padding:14px;
+}
+.modalHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+.modalTitle{
+  font-weight:900;
+}
+.modalClose{
+  cursor:pointer;
+  padding:6px 10px;
+  border-radius:10px;
+  background: var(--chipBg);
+  border: 1px solid var(--chipBd);
+}
+.modalRow{
+  padding:8px 10px;
+  border-radius:12px;
+  background: var(--chipBg);
+  border: 1px solid var(--chipBd);
+  margin-bottom:8px;
+}
+.small{font-size:12px;color:var(--muted)}
+.cell, .weekTable, .modalBox{ box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+</style>
+</head>
+<body>
+<header>
+  <div class="left">
+    <div id="btnMonth" class="btn active">月</div>
+    <div id="btnWeek" class="btn">週間（家族）</div>
+  </div>
+  <div class="right">
+    <div id="btnPrev" class="btn">←</div>
+    <div id="title" class="title"></div>
+    <div id="btnNext" class="btn">→</div>
+    <div id="btnToday" class="btn">今日</div>
+  </div>
+</header>
+
+<div id="nowBar"></div>
+
+<main>
+  <section id="viewMonth"></section>
+  <section id="viewWeek" class="hidden"></section>
+</main>
+
+<!-- modal -->
+<div id="dayModal" class="modal">
+  <div class="modalBox">
+    <div class="modalHeader">
+      <div id="modalTitle" class="modalTitle"></div>
+      <div id="modalClose" class="modalClose">閉じる</div>
+    </div>
+    <div id="modalList"></div>
+  </div>
+</div>
+
+<script>
+/**
+ * ========= 設定 =========
+ */
+const GAS_EXEC_URL = "https://script.google.com/macros/s/AKfycbzv5JPcB78UWeezqpD-n23UZ9tFTaIQkcxOMwtV1cFpJIq_oMdLjFA6ttM_mH7eTZq4/exec"; // ★/exec
+// タグ（カレンダー末尾の（tag））と表示名（左端）を分ける
+const PEOPLE = [
+  { tag:"父", label:"ちち" },
+  { tag:"母", label:"ママ" },
+  { tag:"理", label:"りひと" },
+  { tag:"は", label:"はのん" },
+  { tag:"ふ", label:"ふうが" },
+  { tag:"り", label:"りお" },
+];
+const PEOPLE_TAGS = PEOPLE.map(x=>x.tag);
+const LABEL_BY_TAG = Object.fromEntries(PEOPLE.map(x=>[x.tag,x.label]));
+const TZ_OFFSET = "+09:00";
+
+// 行数（固定高さなので増やしても枠は伸びない。多いと見切れる→+n運用）
+const MAX_MONTH_EVENTS = 3;
+const MAX_WEEK_EVENTS  = 5;
+
+/**
+ * ========= 埋め込み判定 =========
+ */
+const params = new URLSearchParams(location.search);
+if (params.get("embed") === "1" || (window.self !== window.top)) {
+  document.body.classList.add("embed");
+}
+
+/**
+ * ========= JSONP =========
+ */
+function jsonp(url){
+  return new Promise((resolve, reject)=>{
+    const cb = "cb_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+    window[cb] = (data)=>{ resolve(data); cleanup(); };
+    const cleanup = ()=>{ delete window[cb]; script.remove(); };
+    script.onerror = ()=>{ reject(new Error("JSONP failed")); cleanup(); };
+    script.src = `${url}${url.includes("?") ? "&" : "?"}callback=${cb}`;
+    document.head.appendChild(script);
+  });
+}
+async function fetchRange(rangeStartYmd, rangeEndYmd){
+  const url = `${GAS_EXEC_URL}?start=${encodeURIComponent(rangeStartYmd)}&end=${encodeURIComponent(rangeEndYmd)}`;
+  const res = await jsonp(url);
+  if (!res || !res.ok) throw new Error("API response not ok");
+  return res;
+}
+
+/**
+ * ========= util =========
+ */
+function ymd(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), day=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function endOfMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
+function dowLabel(d){ return ["日","月","火","水","木","金","土"][d.getDay()]; }
+function startOfRolling7(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+
+function escapeHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#39;");
+}
+
+function detectPersonFromTitle(title){
+  const m = String(title||"").match(/（([^）]+)）\s*$/);
+  if (!m) return "共通";
+  const tag = m[1].trim();
+  return PEOPLE_TAGS.includes(tag) ? tag : "共通";
+}
+function stripPersonSuffix(title){
+  return String(title||"").replace(/\s*（[^）]{1,6}）\s*$/,"").trim();
+}
+
+function parseEventDate(s, allDay){
+  // allDayは "YYYY-MM-DD" が来る（GAS側仕様）
+  if (allDay && /^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + "T00:00:00" + TZ_OFFSET);
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+// evが跨る日付キー列挙
+function expandToDayKeys(ev, rangeStart, rangeEnd){
+  const out = [];
+  const s = parseEventDate(ev.start, ev.allDay);
+  const e = parseEventDate(ev.end, ev.allDay);
+  if (!s || !e) return out;
+
+  let cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  const last = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+  if (ev.allDay) last.setDate(last.getDate()-1);
+
+  const rs = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate());
+  const re = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate());
+
+  while(cur <= last){
+    if(cur >= rs && cur <= re) out.push(ymd(cur));
+    cur.setDate(cur.getDate()+1);
+  }
+  return out;
+}
+
+function hhmm(d){
+  return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+}
+
+/**
+ * ========= state / DOM =========
+ */
+let mode = "month";
+let cursor = new Date();
+let cachedEvents = [];
+let holidayMap = {}; // { "YYYY-MM-DD": "祝日名" }
+
+const elMonth = document.getElementById("viewMonth");
+const elWeek  = document.getElementById("viewWeek");
+const elTitle = document.getElementById("title");
+const elNowBar = document.getElementById("nowBar");
+
+const dayModal = document.getElementById("dayModal");
+const modalTitle = document.getElementById("modalTitle");
+const modalList = document.getElementById("modalList");
+document.getElementById("modalClose").onclick = ()=>dayModal.style.display="none";
+dayModal.onclick = (e)=>{ if(e.target===dayModal) dayModal.style.display="none"; };
+
+document.getElementById("btnMonth").onclick = ()=>switchMode("month");
+document.getElementById("btnWeek").onclick  = ()=>switchMode("week");
+document.getElementById("btnPrev").onclick  = ()=>move(-1);
+document.getElementById("btnNext").onclick  = ()=>move(+1);
+document.getElementById("btnToday").onclick = ()=>{ cursor=new Date(); refresh(); };
+
+function switchMode(m){
+  mode = m;
+  document.getElementById("btnMonth").classList.toggle("active", m==="month");
+  document.getElementById("btnWeek").classList.toggle("active",  m==="week");
+  elMonth.classList.toggle("hidden", m!=="month");
+  elWeek.classList.toggle("hidden",  m!=="week");
+
+  // 週間に切替えた瞬間は「今日」起点
+  if (m === "week") cursor = new Date();
+
+  refresh();
+}
+
+function move(delta){
+  if (mode==="month"){
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth()+delta, 1);
+  } else {
+    cursor = addDays(cursor, delta*7);
+  }
+  refresh();
+}
+
+/**
+ * ========= Now/Next/Later =========
+ */
+function renderNowBar(events){
+  const now = new Date();
+  const todayKey = ymd(now);
+
+  const todays = events
+    .filter(ev => !ev.allDay)
+    .map(ev => ({...ev, s:parseEventDate(ev.start,false), e:parseEventDate(ev.end,false)}))
+    .filter(ev => ev.s && ev.e)
+    .filter(ev => expandToDayKeys(ev, now, now).includes(todayKey))
+    .sort((a,b)=>a.s-b.s);
+
+  let cur=null, next=null, later=null;
+  for (const ev of todays){
+    if (!cur && now>=ev.s && now<=ev.e) cur = ev;
+    if (!next && ev.s>now) next = ev;
+    else if (next && !later && ev.s>next.s) later = ev;
+  }
+
+  const dateLabel = `${now.getMonth()+1}/${now.getDate()} (${dowLabel(now)})`;
+  const holName = holidayMap[todayKey] ? `・${holidayMap[todayKey]}` : "";
+
+  const chip = (label, ev) => {
+    if (!ev) return `<span class="chip"><b>${label}</b> <span class="muted">-</span></span>`;
+    return `<span class="chip"><b>${label}</b> ${escapeHtml(stripPersonSuffix(ev.title))} <span class="muted">${hhmm(ev.s)}</span></span>`;
+  };
+
+  elNowBar.innerHTML = `
+    <span class="chip"><b>📅 ${dateLabel}${escapeHtml(holName)}</b></span>
+    ${chip("いま", cur)}
+    ${chip("つぎ", next)}
+    ${chip("そのあと", later)}
+  `;
+}
+
+/**
+ * ========= Modal（日付詳細） =========
+ */
+function openDayModal(dayKey){
+  const d = new Date(dayKey + "T00:00:00" + TZ_OFFSET);
+  const list = cachedEvents
+    .filter(ev => expandToDayKeys(ev, d, d).includes(dayKey))
+    .map(ev => {
+      const s = parseEventDate(ev.start, ev.allDay);
+      const e = parseEventDate(ev.end, ev.allDay);
+      const person = detectPersonFromTitle(ev.title);
+      return {
+        allDay: ev.allDay,
+        person,
+        title: stripPersonSuffix(ev.title),
+        time: ev.allDay ? "終日" : `${hhmm(s)}〜${hhmm(e)}`,
+      };
+    })
+    .sort((a,b)=>a.time.localeCompare(b.time));
+
+  const hol = holidayMap[dayKey];
+  modalTitle.textContent = `${dayKey}（${dowLabel(d)}）${hol ? " ・" + hol : ""}`;
+
+  modalList.innerHTML = list.length ? list.map(x=>{
+    const p = (x.person==="共通") ? "共通" : (LABEL_BY_TAG[x.person] || x.person);
+    return `<div class="modalRow">
+      <div><b>${escapeHtml(x.title)}</b></div>
+      <div class="small">${escapeHtml(x.time)} ・ ${escapeHtml(p)}</div>
+    </div>`;
+  }).join("") : `<div class="small">予定なし</div>`;
+
+  dayModal.style.display = "flex";
+}
+
+function isTrashTitle(title){
+  return String(title||"").trim().startsWith("🗑️");
+}
+/**
+ * ========= Month view =========
+ */
+function renderMonth(gridStart, gridEnd, events){
+  elTitle.textContent = `${cursor.getFullYear()}年 ${cursor.getMonth()+1}月`;
+
+  const dows = ["日","月","火","水","木","金","土"];
+  let html = `<div class="month">`;
+  for(const w of dows) html += `<div class="dow">${w}</div>`;
+
+  const todayYmd = ymd(new Date());
+
+  for(let d=new Date(gridStart); d<=gridEnd; d=addDays(d,1)){
+    const key = ymd(d);
+    const isToday = key===todayYmd;
+    const inMonth = d.getMonth()===cursor.getMonth();
+    const dow = d.getDay();
+    const isSat = dow===6;
+    const isSun = dow===0;
+    const isHol = !!holidayMap[key];
+
+    const dayAll = events
+      .filter(ev => expandToDayKeys(ev, d, d).includes(key));
+
+    const trashCount = dayAll.filter(ev => isTrashTitle(ev.title)).length;
+
+    // 表示用（ゴミ除外）
+    const dayEvents = dayAll
+      .filter(ev => !isTrashTitle(ev.title))
+      .map(ev => stripPersonSuffix(ev.title));
+
+    const items = dayEvents.slice(0, MAX_MONTH_EVENTS)
+      .map(t => `<div class="item">${escapeHtml(t)}</div>`).join("");
+
+    const moreN = Math.max(0, dayEvents.length - MAX_MONTH_EVENTS);
+    const moreHtml = moreN>0 ? `<div class="more">+${moreN}</div>` : "";
+
+    const cls = [
+      "cell",
+      isToday ? "today" : "",
+      inMonth ? "" : "dim",
+      isSat ? "sat" : "",
+      isSun ? "sun" : "",
+      isHol ? "hol" : "",
+    ].join(" ").trim();
+
+    html += `
+      <div class="${cls}" data-day="${key}">
+        <div class="day">
+            <span>${d.getDate()}</span>
+            <span class="badges">
+                ${trashCount>0 ? `<span class="badgeTrash">🗑️${trashCount>1 ? "×"+trashCount : ""}</span>` : ""}
+                ${isHol ? `<span class="badgeHol">${escapeHtml(holidayMap[key])}</span>` : ""}
+            </span>
+        </div>
+        <div class="items">${items}${moreHtml}</div>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+  elMonth.innerHTML = html;
+
+  // クリックでモーダル
+  elMonth.querySelectorAll(".cell").forEach(el=>{
+    el.onclick = ()=> openDayModal(el.dataset.day);
+  });
+}
+
+/**
+ * ========= Family week view（今日から7日） =========
+ */
+function renderFamilyWeek(start, end, events){
+  elTitle.textContent = `週間 ${start.getMonth()+1}/${start.getDate()}〜${end.getMonth()+1}/${end.getDate()}`;
+
+  const days = [];
+  for(let i=0;i<7;i++) days.push(addDays(start,i));
+
+  // tag -> dayKey -> events[]
+  const byPerson = {};
+  for(const tag of [...PEOPLE_TAGS, "共通"]) byPerson[tag] = {};
+
+  for(const ev of events){
+    const tag = detectPersonFromTitle(ev.title);
+    const keys = expandToDayKeys(ev, start, end);
+    for(const k of keys){
+      if(!byPerson[tag][k]) byPerson[tag][k] = [];
+      byPerson[tag][k].push(ev);
+    }
+  }
+  const todayKey = ymd(new Date());
+
+  let html = `<table class="weekTable"><thead><tr><th class="person"> </th>`;
+  for(const d of days){
+    const key = ymd(d);
+    const dow = d.getDay();
+    const isSat = dow===6;
+    const isSun = dow===0;
+    const isHol = !!holidayMap[key];
+    const isToday = key === todayKey;
+    const thCls = [isSat?"thSat":"", isSun?"thSun":"", isHol?"thHol":"", isToday?"todayCol":""].join(" ").trim();
+    const hol = isHol ? `・${holidayMap[key]}` : "";
+    const label = `${d.getMonth()+1}/${d.getDate()}(${dowLabel(d)})${isHol ? "・"+holidayMap[key] : ""}`;
+    html += `<th class="${thCls}" data-day="${key}">${escapeHtml(label)}</th>`;
+  }
+  html += `</tr></thead><tbody>`;
+
+  const rows = ["共通", ...PEOPLE_TAGS];
+  for(const tag of rows){
+    const label = (tag==="共通") ? "共通" : (LABEL_BY_TAG[tag] || tag);
+    html += `<tr><td class="person">${escapeHtml(label)}</td>`;
+
+    for (const d of days) {
+    const k = ymd(d);
+
+    // 元のイベント配列を1回だけ取る
+    const evs = (byPerson[tag]?.[k] || []);
+
+    // 表示用：最大 MAX_WEEK_EVENTS 件
+    const show = evs
+        .slice(0, MAX_WEEK_EVENTS)
+        .map(ev => stripPersonSuffix(ev.title));
+
+    // 多すぎ分
+    const moreN = Math.max(0, evs.length - MAX_WEEK_EVENTS);
+
+    // HTML組み立て
+    const itemsHtml = show
+        .map(t => `<div class="item">${escapeHtml(t)}</div>`)
+        .join("");
+
+    const moreHtml = moreN > 0 ? `<div class="more">+${moreN}</div>` : "";
+
+    const tdCls = (k === todayKey) ? ' class="todayCol"' : "";
+    html += `<td${tdCls} data-day="${k}">${itemsHtml}${moreHtml}</td>`;
+    }
+
+    html += `</tr>`;
+  }
+
+  html += `</tbody></table>`;
+  elWeek.innerHTML = html;
+
+  // どのセル押しても日別モーダル
+  elWeek.querySelectorAll("td[data-day], th[data-day]").forEach(el=>{
+    el.onclick = ()=> openDayModal(el.dataset.day);
+  });
+}
+
+/**
+ * ========= refresh =========
+ */
+async function refresh(){
+  try{
+    if (mode==="month"){
+      const s = startOfMonth(cursor);
+      const e = endOfMonth(cursor);
+
+      // 表示グリッド範囲：月初の週の日曜〜月末の週の土曜
+      const gridStart = addDays(s, -s.getDay());
+      const endWeekStart = addDays(e, -e.getDay());
+      const gridEnd = addDays(endWeekStart, 6);
+
+      const res = await fetchRange(ymd(gridStart), ymd(gridEnd));
+      cachedEvents = res.events || [];
+      holidayMap = Object.fromEntries((res.holidays||[]).map(h=>[h.date, h.name]));
+
+      renderNowBar(cachedEvents);
+      renderMonth(gridStart, gridEnd, cachedEvents);
+
+    } else {
+      const base = new Date(cursor || new Date());
+      const s = startOfRolling7(base);
+      const e = addDays(s, 6);
+
+      const res = await fetchRange(ymd(s), ymd(e));
+      cachedEvents = res.events || [];
+      holidayMap = Object.fromEntries((res.holidays||[]).map(h=>[h.date, h.name]));
+
+      renderNowBar(cachedEvents);
+      renderFamilyWeek(s, e, cachedEvents);
+    }
+  } catch(err){
+    console.error(err);
+    elTitle.textContent = "読み込みエラー: " + (err?.message || err);
+    elMonth.innerHTML = `<div style="padding:10px;border:1px solid rgba(255,180,180,.35);border-radius:12px;background:rgba(255,180,180,.08);color:#ffb4b4;">
+      GAS_EXEC_URL / 公開設定 / カレンダーID を確認してな<br><span style="opacity:.8">${escapeHtml(err?.stack || String(err))}</span>
+    </div>`;
+    elWeek.innerHTML = "";
+  }
+}
+
+// 起動＆自動更新（サイネージ向け）
+refresh();
+setInterval(refresh, 60*1000);
+</script>
+</body>
+</html>
