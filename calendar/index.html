@@ -8,10 +8,10 @@
 :root{
   /* existing... */
   --bg:#0b0f14;
-  --panel:#111823;
+  --panel:#293850;
   --text:#e8eef7;
   --muted:#9fb0c7;
-  --line:#2a3a52; /* ←これくらいに上げる（好みで） */
+  --line:#637796; /* ←これくらいに上げる（好みで） */
   --accent:#3aa0ff;
   /* 透明白をやめて“実色”で締める */
   --panel2:#0f172a;   /* panelの一段濃い/浅い調整用 */
@@ -39,7 +39,7 @@ header{
   position:sticky; top:0; z-index:10;
   background:rgba(17,24,35,.92);
   border-bottom:1px solid var(--line);
-  padding:10px 12px;
+  padding:4px 8px;
   display:flex;
   gap:10px;
   align-items:center;
@@ -48,10 +48,10 @@ header{
 .left,.right{display:flex; gap:8px; align-items:center;}
 .btn{
   background:var(--panel);
-  border:1px solid var(--line);
+  border:2px solid var(--line);
   color:var(--text);
-  padding:8px 10px;
-  border-radius:10px;
+  padding:4px 8px;
+  border-radius:8px;
   font-size:14px;
   cursor:pointer;
   user-select:none;
@@ -60,7 +60,7 @@ header{
 .title{min-width:160px;text-align:center;font-weight:800;}
 
 #nowBar{
-  padding:10px 12px;
+  padding:4px 8px;
   border-bottom:1px solid var(--line);
   background:#16202f;
   display:flex;
@@ -71,15 +71,15 @@ header{
 }
 .chip{
   background: var(--chipBg);
-  border: 1px solid var(--chipBd);
-  padding:6px 10px;
+  border: 1.5px solid var(--line);
+  padding:4px 8px;
   border-radius:5px;
   white-space:nowrap;
 }
 .chip b{color:var(--text)}
 .muted{color:var(--muted)}
 
-main{padding:12px;}
+main{padding:8px;}
 .hidden{display:none}
 
 /* Month grid */
@@ -95,8 +95,8 @@ main{padding:12px;}
   overflow:hidden;             /* 角丸を効かせる */
 }
 .dow{
-  padding:6px 8px;
-  height:32px;
+  padding:4px 8px;
+  height:28px;
   display:flex;
   align-items:center;
   background: var(--panel);      /* ★ここ */
@@ -114,7 +114,7 @@ main{padding:12px;}
   border-bottom:1px solid var(--line);
   border-radius:0;             /* マトリクスだから角丸不要 */
   padding:8px;
-  height:120px;
+  height:110px;
   overflow:hidden;        /* ★はみ出し隠す */
   cursor:pointer;
 }
@@ -178,8 +178,8 @@ main{padding:12px;}
 .items{display:flex; flex-direction:column; gap:4px;}
 .item{
   border-radius:5px;                 /* ★浅く */
-  padding:4px 6px;
-  font-size:12.5px;
+  padding:3px 6px;
+  font-size:12px;
   background: var(--panel);          /* ★いまのセル色に寄せる */
 
   box-shadow:none;                   /* 影は不要（マトリクスに合う） */
@@ -242,7 +242,7 @@ main{padding:12px;}
 /* 本体セルの高さを固定（ここが本丸） */
 .weekTable td{
   height:74px;          /* 好みで 56〜74 */
-  padding:6px 8px;
+  padding:3px 6px;
   vertical-align:top;
   overflow:hidden;      /* はみ出し隠す */
 }
@@ -256,13 +256,13 @@ main{padding:12px;}
 
 /* 予定（アイテム）：今のセル色（＝旧panelのもう一段濃い感じ） */
 .weekTable .item{
-  margin-top:4px;
-  padding:4px 6px;
+  margin-top:2px;
+  padding:3px 6px;
   border-radius:5px; /* 浅い角丸 */
-  font-size:12.5px;
+  font-size:12px;
   line-height:1.15;
 
-  background:#0d141f; /* ★月次の「セル面を消した後の空気」に合わせた濃色 */
+  background: var(--panel);          /* ★いまのセル色に寄せる */
 
   overflow:hidden;
   white-space:nowrap;
