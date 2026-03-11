@@ -333,7 +333,19 @@
   ">
     TTSテスト
   </div>
-
+  <button id="castTestBtn" type="button" style="
+    position: fixed;
+    right: 16px;
+    bottom: 90px;
+    z-index: 9999;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.15);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,.25);
+    color: #fff;
+    font-weight: 700;
+  ">CAST TEST</button>
   <div id="clockDebug" style="
     position: fixed; right: 10px; bottom: 10px; z-index: 99999;
     font-size: 12px; color: #fff; background: rgba(0,0,0,.45);
@@ -375,6 +387,103 @@
     </div>
   </div>
   <div id="menuHandle" aria-hidden="true"></div>
+<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+<script>
+  let __castReady = false;
+  let __castReadyResolver = null;
+
+  const __castReadyPromise = new Promise((resolve) => {
+    __castReadyResolver = resolve;
+  });
+
+  function enableCastButton_() {
+    const btn = document.getElementById("castTestBtn");
+    if (btn) btn.disabled = false;
+  }
+
+  function disableCastButton_() {
+    const btn = document.getElementById("castTestBtn");
+    if (btn) btn.disabled = true;
+  }
+
+  disableCastButton_();
+
+  window.__onGCastApiAvailable = function(isAvailable) {
+    if (!isAvailable) {
+      console.log("[CAST] API not available");
+      return;
+    }
+
+    try {
+      const context = cast.framework.CastContext.getInstance();
+      context.setOptions({
+        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+        autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+      });
+
+      __castReady = true;
+      __castReadyResolver?.(true);
+      enableCastButton_();
+
+      console.log("[CAST] ready");
+    } catch (e) {
+      console.error("[CAST] init failed", e);
+    }
+  };
+
+  async function waitForCastReady_() {
+    if (__castReady) return true;
+    return await __castReadyPromise;
+  }
+
+  window.castAudioUrl_ = async function(url, title = "Signage Test", mimeType = "audio/mpeg") {
+    if (!url) throw new Error("Cast URL is empty");
+
+    await waitForCastReady_();
+
+    const context = cast.framework.CastContext.getInstance();
+    let session = context.getCurrentSession();
+
+    if (!session) {
+      await context.requestSession();
+      session = context.getCurrentSession();
+    }
+
+    if (!session) {
+      throw new Error("Cast session not established");
+    }
+
+    const mediaInfo = new chrome.cast.media.MediaInfo(url, mimeType);
+    const metadata = new chrome.cast.media.GenericMediaMetadata();
+    metadata.title = title;
+    mediaInfo.metadata = metadata;
+
+    const request = new chrome.cast.media.LoadRequest(mediaInfo);
+    request.autoplay = true;
+
+    await new Promise((resolve, reject) => {
+      session.loadMedia(
+        request,
+        () => {
+          console.log("[CAST] PLAY", { url, title });
+          resolve(true);
+        },
+        (err) => reject(err)
+      );
+    });
+  };
+
+  document.getElementById("castTestBtn")?.addEventListener("click", async () => {
+    const url = "https://alleshokai-gif.github.io/signage-assets/assets/voice/test.mp3";
+
+    try {
+      await castAudioUrl_(url, "Signage Test", "audio/mpeg");
+    } catch (e) {
+      console.error("[CAST TEST FAIL]", e);
+      alert(e?.message || e);
+    }
+  });
+</script>
 <script>
 (() => {
 
@@ -751,6 +860,22 @@
       await playRadioQueue(queue);
     }
 
+    async function requestCastIfNeeded_(reason){
+      try{
+        const map = {
+          cast_wakeup: 'https://alleshokai-gif.github.io/signage-assets/assets/voice/0635_wakeup.mp3',
+          cast_sleep:  'https://alleshokai-gif.github.io/signage-assets/assets/voice/2130_sleep.mp3',
+        };
+
+        const url = map[reason];
+        if (!url) return;
+
+        await castAudioUrl_(url, reason);
+      }catch(err){
+        console.error('[CAST FAIL]', reason, err);
+      }
+    }
+
     function wait(ms){
       return new Promise(r=>setTimeout(r,ms));
     }
@@ -1125,16 +1250,18 @@
 
     resetIdleTimer();
 
-    const CLOCK_SPEAK_TIMES = ['06:55','07:20','07:40','18:30','21:00'];
+    const CLOCK_SPEAK_TIMES = ['06:35','06:55','07:20','07:40','18:30','21:00','21:30'];
     const CLOCK_KEY_PREFIX  = 'clockSpoke_';
 
     function reasonByHm_(hm){
       switch(hm){
-        case '06:55': return 'clock_0655';  // 朝ショート
-        case '07:20': return 'clock_0720';  // 朝フル
-        case '07:40': return 'clock_0740';  // 週明けだけ（ギア）
-        case '18:30': return 'clock_1830';  // 夜準備
-        case '21:00': return 'clock_2100';  // 夜最終
+        case '06:35': return 'cast_wakeup';
+        case '06:55': return 'clock_0655';
+        case '07:20': return 'clock_0720';
+        case '07:40': return 'clock_0740';
+        case '18:30': return 'clock_1830';
+        case '21:00': return 'clock_2100';
+        case '21:30': return 'cast_sleep';
         default:      return 'clock';
       }
     }
@@ -1193,7 +1320,16 @@
 
       // ★ここが重要：hmに応じたreasonを投げる
       const reason = reasonByHm_(hm);
-      requestRadioItems(reason);
+
+      const castOnlyReasons = ['cast_wakeup', 'cast_sleep'];
+
+      // シャオミで鳴らすやつだけ通常radio
+      if (!castOnlyReasons.includes(reason)) {
+        requestRadioItems(reason);
+      }
+
+      // Cast対象は別処理
+      requestCastIfNeeded_(reason);
     }
 
     console.log('[BOOT] start clock loop', new Date().toString());

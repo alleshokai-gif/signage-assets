@@ -450,6 +450,29 @@ function parseEventDate(s, allDay){
   return d;
 }
 
+function sortEventsForDisplay(events){
+  return [...events].sort((a, b) => {
+    const aStart = parseEventDate(a.start, a.allDay);
+    const bStart = parseEventDate(b.start, b.allDay);
+    const aEnd   = parseEventDate(a.end, a.allDay);
+    const bEnd   = parseEventDate(b.end, b.allDay);
+
+    // 終日は上に出したいならこれを有効
+    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+
+    // 開始時刻
+    const startDiff = aStart - bStart;
+    if (startDiff !== 0) return startDiff;
+
+    // 同時刻なら終了早い順
+    const endDiff = aEnd - bEnd;
+    if (endDiff !== 0) return endDiff;
+
+    // 最後はタイトル順で安定化
+    return String(a.title || "").localeCompare(String(b.title || ""), "ja");
+  });
+}
+
 // evが跨る日付キー列挙
 function expandToDayKeys(ev, rangeStart, rangeEnd){
   const out = [];
@@ -564,20 +587,20 @@ function renderNowBar(events){
  */
 function openDayModal(dayKey){
   const d = new Date(dayKey + "T00:00:00" + TZ_OFFSET);
-  const list = cachedEvents
-    .filter(ev => expandToDayKeys(ev, d, d).includes(dayKey))
-    .map(ev => {
-      const s = parseEventDate(ev.start, ev.allDay);
-      const e = parseEventDate(ev.end, ev.allDay);
-      const person = detectPersonFromTitle(ev.title);
-      return {
-        allDay: ev.allDay,
-        person,
-        title: stripPersonSuffix(ev.title),
-        time: ev.allDay ? "終日" : `${hhmm(s)}〜${hhmm(e)}`,
-      };
-    })
-    .sort((a,b)=>a.time.localeCompare(b.time));
+  const dayEvents = sortEventsForDisplay(
+  cachedEvents.filter(ev => expandToDayKeys(ev, d, d).includes(dayKey))
+  );
+  const list = dayEvents.map(ev => {
+    const s = parseEventDate(ev.start, ev.allDay);
+    const e = parseEventDate(ev.end, ev.allDay);
+    const person = detectPersonFromTitle(ev.title);
+    return {
+      allDay: ev.allDay,
+      person,
+      title: stripPersonSuffix(ev.title),
+      time: ev.allDay ? "終日" : `${hhmm(s)}〜${hhmm(e)}`,
+    };
+  });
 
   const hol = holidayMap[dayKey];
   modalTitle.textContent = `${dayKey}（${dowLabel(d)}）${hol ? " ・" + hol : ""}`;
@@ -617,15 +640,16 @@ function renderMonth(gridStart, gridEnd, events){
     const isSun = dow===0;
     const isHol = !!holidayMap[key];
 
-    const dayAll = events
-      .filter(ev => expandToDayKeys(ev, d, d).includes(key));
+    const dayAll = sortEventsForDisplay(
+    events.filter(ev => expandToDayKeys(ev, d, d).includes(key))
+    );
 
     const trashCount = dayAll.filter(ev => isTrashTitle(ev.title)).length;
 
     // 表示用（ゴミ除外）
     const dayEvents = dayAll
-      .filter(ev => !isTrashTitle(ev.title))
-      .map(ev => stripPersonSuffix(ev.title));
+    .filter(ev => !isTrashTitle(ev.title))
+    .map(ev => stripPersonSuffix(ev.title));
 
     const items = dayEvents.slice(0, MAX_MONTH_EVENTS)
       .map(t => `<div class="item">${escapeHtml(t)}</div>`).join("");
@@ -712,7 +736,7 @@ function renderFamilyWeek(start, end, events){
     const k = ymd(d);
 
     // 元のイベント配列を1回だけ取る
-    const evs = (byPerson[tag]?.[k] || []);
+    const evs = sortEventsForDisplay(byPerson[tag]?.[k] || []);
 
     // 表示用：最大 MAX_WEEK_EVENTS 件
     const show = evs
