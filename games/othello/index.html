@@ -14,7 +14,7 @@
     --accent: rgba(120,200,255,.95);
     --warn: rgba(255,220,120,.95);
 
-    --tile: 66px;         /* 盤の1マスサイズ（画面で自動スケールされる） */
+    --tile: 66px;
     --gap: 14px;
     --radius: 22px;
   }
@@ -24,15 +24,15 @@
   button{ font:inherit; }
 
   .wrap{
-    min-height: 100dvh;        /* height:100% より安定 */
+    min-height: 100dvh;
     display:flex;
     align-items:center;
     justify-content:center;
     padding: 18px;
   }
   .card{
-    width: min(940px, 100%);   /* 98vw → 100% に */
-    margin: 0 auto;            /* 念のため */
+    width: min(940px, 100%);
+    margin: 0 auto;
     display:grid;
     grid-template-columns: 1fr minmax(280px, 360px);
     gap: var(--gap);
@@ -184,6 +184,7 @@
         <div class="row"><span>手番</span><b id="turnTxt">あなた（黒）</b></div>
         <div class="row"><span>黒</span><b id="bCnt">2</b></div>
         <div class="row"><span>白</span><b id="wCnt">2</b></div>
+        <div class="row"><span>モード</span><b id="modeTxt">VS COM</b></div>
         <div class="row"><span>COM</span><b id="aiTxt">NORMAL</b></div>
       </div>
 
@@ -194,6 +195,14 @@
         <button id="btnUndo" class="btn">もどす</button>
       </div>
 
+      <div>
+        <div class="small" style="margin:6px 0 8px;">対戦モード</div>
+        <div class="seg" id="modeSeg" style="grid-template-columns: 1fr 1fr;">
+          <button data-mode="vscom" class="on">VS COM</button>
+          <button data-mode="vs2p">2P</button>
+        </div>
+      </div>
+
       <div class="tog">
         <label>打てる場所表示</label>
         <input id="chkMoves" type="checkbox" checked />
@@ -201,7 +210,7 @@
 
       <div>
         <div class="small" style="margin:6px 0 8px;">難易度</div>
-        <div class="seg">
+        <div class="seg" id="aiSeg">
           <button data-ai="easy">EASY</button>
           <button data-ai="normal" class="on">NORMAL</button>
           <button data-ai="hard">HARD</button>
@@ -210,7 +219,8 @@
 
       <div class="small">
         ・盤タップだけでOK<br>
-        ・ヒント：おすすめ手をピカッと表示<br>
+        ・2Pなら1台で交互に対戦<br>
+        ・ヒントは現在手番のおすすめ手<br>
         ・HARDは少し考える（端末次第）
       </div>
     </div>
@@ -221,7 +231,7 @@
 (() => {
   // ====== 基本設定 ======
   const N = 8;
-  const EMPTY = 0, BLACK = 1, WHITE = -1; // あなた=黒、COM=白
+  const EMPTY = 0, BLACK = 1, WHITE = -1;
   const DIRS = [
     [-1,-1],[-1,0],[-1,1],
     [0,-1],        [0,1],
@@ -235,6 +245,7 @@
   const bCnt = document.getElementById('bCnt');
   const wCnt = document.getElementById('wCnt');
   const aiTxt = document.getElementById('aiTxt');
+  const modeTxt = document.getElementById('modeTxt');
 
   const btnNew = document.getElementById('btnNew');
   const btnHint = document.getElementById('btnHint');
@@ -242,16 +253,19 @@
   const btnUndo = document.getElementById('btnUndo');
   const chkMoves = document.getElementById('chkMoves');
   const btnBgm = document.getElementById('btnBgm');
-  const segBtns = [...document.querySelectorAll('.seg button')];
+
+  const aiSegBtns = [...document.querySelectorAll('#aiSeg button')];
+  const modeSegBtns = [...document.querySelectorAll('#modeSeg button')];
 
   // ====== 盤面・状態 ======
   let board = makeBoard();
-  let turn = BLACK; // 黒から
-  let history = []; // undo用
+  let turn = BLACK;
+  let history = [];
   let showMoves = true;
   let aiLevel = 'normal';
   let hintMove = null;
-  let lock = false; // COM思考中ロック
+  let lock = false;
+  let gameMode = 'vscom'; // 'vscom' | 'vs2p'
 
   function makeBoard(){
     const b = Array.from({length:N}, ()=>Array(N).fill(EMPTY));
@@ -316,7 +330,7 @@
     return legalMoves(b, BLACK).length===0 && legalMoves(b, WHITE).length===0;
   }
 
-  // ====== 評価（NORMAL/HARD用） ======
+  // ====== 評価 ======
   const WEIGHT = [
     [120,-20, 20,  5,  5, 20,-20,120],
     [-20,-40, -5, -5, -5, -5,-40,-20],
@@ -329,7 +343,6 @@
   ];
 
   function evalBoard(b, color){
-    // color視点のスコア（大きいほど有利）
     let s = 0;
     for (let r=0;r<N;r++){
       for (let c=0;c<N;c++){
@@ -338,7 +351,6 @@
         else if (v === -color) s -= WEIGHT[r][c];
       }
     }
-    // 可動性（打てる手の数）
     const my = legalMoves(b, color).length;
     const op = legalMoves(b, -color).length;
     s += 5*(my - op);
@@ -357,21 +369,18 @@
     if (aiLevel === 'normal'){
       let best = moves[0], bestS = -1e9;
       for (const m of moves){
-        const nb = applyMove(b, m, WHITE);
-        let s = WEIGHT[m.r][m.c];  // ← 盤評価だけにする
+        const s = WEIGHT[m.r][m.c];
         if (s > bestS){ bestS=s; best=m; }
       }
       return best;
     }
 
-    // hard: minimax + alpha-beta
-    const DEPTH = 4; // 端末で重ければ3に
+    const DEPTH = 4;
     const res = alphabeta(b, DEPTH, -1e9, 1e9, true);
     return res.move || moves[0];
   }
 
   function alphabeta(b, depth, alpha, beta, maximizing){
-    // maximizing: WHITEの番（AI）
     const color = maximizing ? WHITE : BLACK;
     const moves = legalMoves(b, color);
 
@@ -379,9 +388,7 @@
       return { score: evalBoard(b, WHITE), move: null };
     }
 
-    // パス処理
     if (!moves.length){
-      // 相手に手番を渡す
       const r = alphabeta(b, depth-1, alpha, beta, !maximizing);
       return { score: r.score, move: null };
     }
@@ -417,14 +424,13 @@
     }
   }
 
-  function pickHintMove(){
-    const moves = legalMoves(board, BLACK);
+  function pickHintMove(color = turn){
+    const moves = legalMoves(board, color);
     if (!moves.length) return null;
-    // あなた目線で良い手：角優先 + 評価
     let best = moves[0], bestS = -1e9;
     for (const m of moves){
-      const nb = applyMove(board, m, BLACK);
-      let s = evalBoard(nb, BLACK);
+      const nb = applyMove(board, m, color);
+      let s = evalBoard(nb, color);
       if ((m.r===0||m.r===7) && (m.c===0||m.c===7)) s += 200;
       if (s > bestS){ bestS=s; best=m; }
     }
@@ -436,14 +442,12 @@
     const size = cv.width;
     const cell = size / N;
 
-    // 背景（FC風：少しグラデ）
     const g = ctx.createLinearGradient(0,0,0,size);
     g.addColorStop(0,'#116a3a');
     g.addColorStop(1,'#0b4a28');
     ctx.fillStyle = g;
     ctx.fillRect(0,0,size,size);
 
-    // グリッド
     ctx.strokeStyle = 'rgba(0,0,0,.45)';
     ctx.lineWidth = 2;
     for (let i=0;i<=N;i++){
@@ -451,7 +455,6 @@
       ctx.beginPath(); ctx.moveTo(0,i*cell); ctx.lineTo(size,i*cell); ctx.stroke();
     }
 
-    // 置ける場所（薄いドット）
     const moves = legalMoves(board, turn);
     if (showMoves && moves.length){
       for (const m of moves){
@@ -462,7 +465,6 @@
       }
     }
 
-    // ヒント点滅
     if (hintMove){
       const t = Date.now();
       const blink = (Math.floor(t/250)%2)===0;
@@ -475,7 +477,6 @@
       }
     }
 
-    // コマ
     for (let r=0;r<N;r++){
       for (let c=0;c<N;c++){
         const v = board[r][c];
@@ -485,11 +486,9 @@
         const y = (r+0.5)*cell;
         const rad = cell*0.38;
 
-        // 影
         ctx.fillStyle = 'rgba(0,0,0,.35)';
         ctx.beginPath(); ctx.arc(x+3,y+4,rad,0,Math.PI*2); ctx.fill();
 
-        // コマ本体（FC風：少し立体）
         const gg = ctx.createRadialGradient(x-rad*0.2, y-rad*0.2, rad*0.2, x, y, rad);
         if (v === BLACK){
           gg.addColorStop(0,'#444');
@@ -509,24 +508,31 @@
   }
 
   // ====== UI更新 ======
+  function getTurnLabel(){
+    if (gameMode === 'vs2p'){
+      return turn === BLACK ? '黒の番' : '白の番';
+    }
+    return turn === BLACK ? 'あなた（黒）' : 'COM（白）';
+  }
+
   function updateStatus(){
     const {black, white} = countPieces(board);
     bCnt.textContent = black;
     wCnt.textContent = white;
-    aiTxt.textContent = aiLevel.toUpperCase();
+    aiTxt.textContent = gameMode === 'vs2p' ? 'OFF' : aiLevel.toUpperCase();
+    modeTxt.textContent = gameMode === 'vs2p' ? '2P' : 'VS COM';
+    turnTxt.textContent = getTurnLabel();
 
-    if (turn === BLACK) turnTxt.textContent = 'あなた（黒）';
-    else turnTxt.textContent = 'COM（白）';
-
-    // パス可否
     btnPass.disabled = lock;
     btnHint.disabled = lock;
     btnUndo.disabled = history.length === 0 || lock;
 
+    const aiDisabled = gameMode === 'vs2p';
+    aiSegBtns.forEach(b => b.disabled = aiDisabled);
     draw();
   }
 
-  // ====== 入力（タップのみ） ======
+  // ====== 入力 ======
   function cellFromEvent(ev){
     const rect = cv.getBoundingClientRect();
     const x = (ev.clientX - rect.left) * (cv.width / rect.width);
@@ -539,62 +545,87 @@
 
   cv.addEventListener('pointerdown', async (ev)=>{
     if (lock) return;
-    if (turn !== BLACK) return;
 
     const {r,c} = cellFromEvent(ev);
-    const f = flipsForMove(board, r, c, BLACK);
+    const f = flipsForMove(board, r, c, turn);
     if (!f.length){
       sfxBad();
       return;
     }
 
-    // 手を適用
     history.push({board: cloneBoard(board), turn});
     hintMove = null;
 
-    board[r][c] = BLACK;
-    for (const [rr,cc] of f) board[rr][cc] = BLACK;
+    board[r][c] = turn;
+    for (const [rr,cc] of f) board[rr][cc] = turn;
     sfxPlace();
 
-    // 手番交代
-    turn = WHITE;
+    turn = -turn;
     updateStatus();
 
-    await maybeAiTurn();
+    if (gameMode === 'vscom'){
+      await maybeAiTurn();
+    } else {
+      handle2pFlow();
+    }
   });
 
-  async function maybeAiTurn(){
+  function handle2pFlow(){
     if (gameOver(board)){
       endGame();
       return;
     }
 
-    // AIが打てる？
+    const currentMoves = legalMoves(board, turn);
+    if (currentMoves.length) return;
+
+    sfxPass();
+    const passedColor = turn;
+    turn = -turn;
+    updateStatus();
+
+    const nextMoves = legalMoves(board, turn);
+    if (!nextMoves.length){
+      endGame();
+      return;
+    }
+
+    alert(`${passedColor === BLACK ? '黒' : '白'}は打てる場所がないのでパス！`);
+  }
+
+  async function maybeAiTurn(){
+    if (gameMode !== 'vscom') return;
+
+    if (gameOver(board)){
+      endGame();
+      return;
+    }
+
     const aiMoves = legalMoves(board, WHITE);
     if (!aiMoves.length){
-      // AIパス
       sfxPass();
       turn = BLACK;
       updateStatus();
 
-      // 人も打てないなら終了
       if (!legalMoves(board, BLACK).length) endGame();
       return;
     }
 
+    if (turn !== WHITE) return;
+
     lock = true;
     updateStatus();
 
-    // “ファミコンの間”を演出
     await sleep(aiLevel==='hard' ? 450 : 260);
 
     const move = pickAiMove(board);
     if (!move){
       lock = false;
+      updateStatus();
       return;
     }
 
-    history.push({board: cloneBoard(board), turn}); // undo用（AI手も戻せる）
+    history.push({board: cloneBoard(board), turn});
     board = applyMove(board, move, WHITE);
     sfxPlace2();
 
@@ -602,7 +633,6 @@
     lock = false;
     updateStatus();
 
-    // 人が打てないならパス
     if (!legalMoves(board, BLACK).length){
       sfxPass();
       turn = WHITE;
@@ -614,12 +644,30 @@
   function endGame(){
     const {black, white} = countPieces(board);
     let msg = '';
-    if (black > white) msg = 'あなたの勝ち！';
-    else if (black < white) msg = 'COMの勝ち…';
+    if (black > white) msg = '黒の勝ち！';
+    else if (black < white) msg = '白の勝ち！';
     else msg = '引き分け！';
 
-    sfxWin(black>white);
+    const humanWin = gameMode === 'vscom' ? (black > white) : false;
+    sfxWin(humanWin);
+
+    if (gameMode === 'vscom'){
+      if (black > white) msg = 'あなたの勝ち！';
+      else if (black < white) msg = 'COMの勝ち…';
+      else msg = '引き分け！';
+    }
+
     alert(`ゲーム終了\n黒 ${black} / 白 ${white}\n${msg}`);
+  }
+
+  function resetGame(){
+    board = makeBoard();
+    turn = BLACK;
+    history = [];
+    hintMove = null;
+    lock = false;
+    sfxStart();
+    updateStatus();
   }
 
   function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
@@ -628,24 +676,17 @@
   btnNew.addEventListener('pointerdown', (e)=>{
     e.preventDefault();
     if (lock) return;
-    board = makeBoard();
-    turn = BLACK;
-    history = [];
-    hintMove = null;
-    sfxStart();
-    updateStatus();
+    resetGame();
   });
 
   btnHint.addEventListener('pointerdown', (e)=>{
     e.preventDefault();
     if (lock) return;
-    if (turn !== BLACK) return;
-    const hm = pickHintMove();
+    const hm = pickHintMove(turn);
     if (!hm){ sfxBad(); return; }
     hintMove = hm;
     sfxHint();
     updateStatus();
-    // 3秒でヒント消す
     setTimeout(()=>{ hintMove=null; updateStatus(); }, 3000);
   });
 
@@ -655,7 +696,6 @@
 
     const ms = legalMoves(board, turn);
     if (ms.length){
-      // 打てるのにパスは不可（FCっぽく拒否）
       sfxBad();
       return;
     }
@@ -664,8 +704,10 @@
     turn = -turn;
     updateStatus();
 
-    if (turn === WHITE) await maybeAiTurn();
-    else {
+    if (gameMode === 'vscom'){
+      if (turn === WHITE) await maybeAiTurn();
+      else if (!legalMoves(board, BLACK).length && !legalMoves(board, WHITE).length) endGame();
+    } else {
       if (!legalMoves(board, BLACK).length && !legalMoves(board, WHITE).length) endGame();
     }
   });
@@ -687,11 +729,11 @@
     updateStatus();
   });
 
-  segBtns.forEach(b=>{
+  aiSegBtns.forEach(b=>{
     b.addEventListener('pointerdown', (e)=>{
       e.preventDefault();
-      if (lock) return;
-      segBtns.forEach(x=>x.classList.remove('on'));
+      if (lock || gameMode === 'vs2p') return;
+      aiSegBtns.forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
       aiLevel = b.dataset.ai;
       updateStatus();
@@ -699,26 +741,31 @@
     });
   });
 
-  // ====== FC風サウンド（3和音BGM + 効果音） ======
+  modeSegBtns.forEach(b=>{
+    b.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      if (lock) return;
+      modeSegBtns.forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      gameMode = b.dataset.mode;
+      sfxMenu();
+      resetGame();
+    });
+  });
+
+  // ====== サウンド ======
   function noteToHz(note){
     if (!note || note === 'R') return 0;
-  
-    // 例: "C#4", "Db4", "A3"
     const m = String(note).match(/^([A-G])([#b]?)(\d)$/);
     if (!m) return 0;
-  
     const [, L, acc, octStr] = m;
     const oct = Number(octStr);
-  
-    // Cを0として半音番号
     const base = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 }[L];
     const alter = acc === '#' ? 1 : acc === 'b' ? -1 : 0;
-    const midi = (oct + 1) * 12 + (base + alter); // C4=60, A4=69
-  
-    // A4(69)=440Hz
+    const midi = (oct + 1) * 12 + (base + alter);
     return 440 * Math.pow(2, (midi - 69) / 12);
   }
-  
+
   let AC = null;
   let bgmOn = false;
   let bgmNodes = null;
@@ -731,7 +778,7 @@
   }
 
   function tone(freq, ms=80, type='square', vol=0.08){
-    if (!AC) return;
+    if (!AC || !freq) return;
     const t0 = AC.currentTime;
     const o = AC.createOscillator();
     const g = AC.createGain();
@@ -765,10 +812,6 @@
     }
   }
 
-  // 3和音BGM（ファミコンっぽい短いループ）
-  // ===== 改良FC風BGM =====
-  // 32 steps / ループ長め
-  // メロ（コロブチカ由来の骨格。リズムは“そのままコピー”を避けて再配置）
   const MELO = [
     'E5','R','B4','C5','D5','R','C5','B4',
     'A4','R','A4','C5','E5','R','D5','C5',
@@ -780,8 +823,7 @@
     'B4','R','B4','C5','D5','R','E5','R',
     'C5','R','A4','R','A4','R','R','R',
   ];
-  
-  // ベース（ちぃ兄コード進行：Am E7 Am G | C Dm E7 Am）
+
   const BASS = [
     'A2','R','A2','R',  'E2','R','E2','R',
     'A2','R','A2','R',  'G2','R','G2','R',
@@ -793,27 +835,26 @@
     'C3','R','C3','R',  'D3','R','D3','R',
     'E2','R','E2','R',  'A2','R','A2','R',
   ];
-  
-  // ハモ（コードの3度・5度を薄く。音量小さめで“それっぽさ”）
-  const HARM = [
-    'C4','R','E4','R',  'G#3','R','B3','R', // Am → E7
-    'C4','R','E4','R',  'B3','R','D4','R',  // Am → G
-    'E4','R','G4','R',  'F4','R','A4','R',  // C → Dm
-    'G#3','R','B3','R', 'C4','R','E4','R',  // E7 → Am
 
-    'C4','R','E4','R',  'G#3','R','B3','R', // Am → E7
-    'C4','R','E4','R',  'B3','R','D4','R',  // Am → G
-    'E4','R','G4','R',  'F4','R','A4','R',  // C → Dm
-    'G#3','R','B3','R', 'C4','R','E4','R',  // E7 → Am
+  const HARM = [
+    'C4','R','E4','R',  'G#3','R','B3','R',
+    'C4','R','E4','R',  'B3','R','D4','R',
+    'E4','R','G4','R',  'F4','R','A4','R',
+    'G#3','R','B3','R', 'C4','R','E4','R',
+
+    'C4','R','E4','R',  'G#3','R','B3','R',
+    'C4','R','E4','R',  'B3','R','D4','R',
+    'E4','R','G4','R',  'F4','R','A4','R',
+    'G#3','R','B3','R', 'C4','R','E4','R',
   ];
-  // 32-step loop
+
   const STEP_MS = 170;
-  
+
   function startBgm(){
     ensureAudio();
     if (!AC || bgmOn) return;
     bgmOn = true;
-  
+
     const mkVoice = (type) => {
       const o = AC.createOscillator();
       const g = AC.createGain();
@@ -823,27 +864,27 @@
       o.start();
       return {o,g};
     };
-    
-    const v1 = mkVoice('square');   // melody
-    const v2 = mkVoice('triangle'); // bass（FC感）
-    const v3 = mkVoice('square');   // harmony
+
+    const v1 = mkVoice('square');
+    const v2 = mkVoice('triangle');
+    const v3 = mkVoice('square');
     bgmNodes = [v1,v2,v3];
 
     let idx = 0;
     bgmTimer = setInterval(()=>{
       const t = AC.currentTime;
-    
+
       const n1 = MELO[idx % MELO.length];
       const n2 = BASS[idx % BASS.length];
       const n3 = HARM[idx % HARM.length];
-    
+
       const hz1 = noteToHz(n1);
       const hz2 = noteToHz(n2);
       const hz3 = noteToHz(n3);
-    
+
       const notes = [hz1, hz2, hz3];
-      const vols  = [0.060, 0.050, 0.030]; // ハモ薄め
-    
+      const vols  = [0.060, 0.050, 0.030];
+
       notes.forEach((hz,i)=>{
         const v = bgmNodes[i];
         if (!hz){
@@ -851,14 +892,12 @@
           return;
         }
         v.o.frequency.setValueAtTime(hz, t);
-  
-        // ピコピコの“粒”を作る
         v.g.gain.cancelScheduledValues(t);
         v.g.gain.setValueAtTime(0.0001, t);
         v.g.gain.linearRampToValueAtTime(vols[i], t + 0.015);
         v.g.gain.setTargetAtTime(0.0001, t + (STEP_MS/1000)*0.72, 0.03);
       });
-    
+
       idx++;
     }, STEP_MS);
   }
@@ -877,7 +916,6 @@
 
   btnBgm.addEventListener('pointerdown', (e)=>{
     e.preventDefault();
-    // ブラウザの制限対策：最初のタップでAudioContext起動
     ensureAudio();
     if (!AC) return;
     if (AC.state === 'suspended') AC.resume();
@@ -887,7 +925,6 @@
     sfxMenu();
   });
 
-  // ===== 初期描画 =====
   updateStatus();
   draw();
 })();
