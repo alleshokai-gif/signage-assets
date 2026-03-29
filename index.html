@@ -804,7 +804,11 @@
 
         // ===== TTS =====
         if(it.type === 'tts'){
-          const url = GAS_API_URL + '?text=' + encodeURIComponent(it.text || '');
+          const url =
+            GAS_API_URL +
+            '?speaker=' + encodeURIComponent(it.speaker || '') +
+            '&text=' + encodeURIComponent(it.text || '');
+
           const res = await fetch(url, { cache:'no-store' });
           const j = await res.json();
 
