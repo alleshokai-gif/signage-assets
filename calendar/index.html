@@ -161,7 +161,7 @@ main{padding:8px;}
   min-width: 80px;     /* 右端がガタつくの防止 */
 }
 
-.badgeTrash{
+.badgeTrash .badgeSchool{
   background: none;
   border: none;
   box-shadow: none;
@@ -619,6 +619,16 @@ function openDayModal(dayKey){
 function isTrashTitle(title){
   return String(title||"").trim().startsWith("🗑️");
 }
+function isSchoolTitle(title){
+  return String(title||"").trim().startsWith("🏫");
+}
+
+function detectPersonTag(title){
+  const t = String(title || "").trim();
+  const m = t.match(/[（(]\s*([^）)\s]{1,3})\s*[）)]\s*$/);
+  return m ? m[1] : "";
+}
+
 /**
  * ========= Month view =========
  */
@@ -646,15 +656,36 @@ function renderMonth(gridStart, gridEnd, events){
 
     const trashCount = dayAll.filter(ev => isTrashTitle(ev.title)).length;
 
-    // 表示用（ゴミ除外）
+    const schoolEvents = dayAll.filter(ev => isSchoolTitle(ev.title));
+
+    // 例: ["ふ","り"] を作る
+    const schoolTags = [...new Set(
+      schoolEvents
+        .map(ev => detectPersonTag(ev.title))
+        .filter(Boolean)
+    )];
+
+    // 学校イベントあるけど person 不明なら 1個だけ出す
+    const hasSchool = schoolEvents.length > 0;
+
+    // 表示用（ゴミ除外、学校は圧縮）
     const dayEvents = dayAll
-    .filter(ev => !isTrashTitle(ev.title))
-    .map(ev => stripPersonSuffix(ev.title));
+      .filter(ev => !isTrashTitle(ev.title) && !isSchoolTitle(ev.title))
+      .map(ev => stripPersonSuffix(ev.title));
 
-    const items = dayEvents.slice(0, MAX_MONTH_EVENTS)
-      .map(t => `<div class="item">${escapeHtml(t)}</div>`).join("");
+    // 重複を軽く除去（同じ日に🏫ふが複数あっても1つにする）
+    const seen = new Set();
+    const compactEvents = dayEvents.filter(t => {
+      if (seen.has(t)) return false;
+      seen.add(t);
+      return true;
+    });
 
-    const moreN = Math.max(0, dayEvents.length - MAX_MONTH_EVENTS);
+    const items = compactEvents.slice(0, MAX_MONTH_EVENTS)
+      .map(t => `<div class="item">${escapeHtml(t)}</div>`)
+      .join("");
+
+    const moreN = Math.max(0, compactEvents.length - MAX_MONTH_EVENTS);
     const moreHtml = moreN>0 ? `<div class="more">+${moreN}</div>` : "";
 
     const cls = [
@@ -672,6 +703,12 @@ function renderMonth(gridStart, gridEnd, events){
             <span>${d.getDate()}</span>
             <span class="badges">
                 ${trashCount>0 ? `<span class="badgeTrash">🗑️${trashCount>1 ? "×"+trashCount : ""}</span>` : ""}
+                ${hasSchool
+                  ? schoolTags.length
+                      ? schoolTags.map(tag => `<span class="badgeSchool">🏫${escapeHtml(tag)}</span>`).join("")
+                      : `<span class="badgeSchool">🏫</span>`
+                  : ""
+                }
                 ${isHol ? `<span class="badgeHol">${escapeHtml(holidayMap[key])}</span>` : ""}
             </span>
         </div>
