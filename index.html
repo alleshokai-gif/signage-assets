@@ -475,10 +475,10 @@
     };
 
     const PAGES = {
-      home:    { url: 'https://lookerstudio.google.com/embed/reporting/c3341ade-526b-4ef1-8f77-e04e885ccf81/page/p_7ie80j9qzd', auto:true, immersive:false },
-      temp:    { url: 'https://lookerstudio.google.com/embed/reporting/a9247f37-fc30-425b-a648-1c360e725914/page/p_2o3y60glyd', auto:true, immersive:false },
-      school:  { url: 'https://lookerstudio.google.com/embed/reporting/e56ad71b-8c4c-4a59-88fa-99e773c8809a/page/p_20w8aknpyd', auto:true, immersive:false },
-      finance: { url: 'https://lookerstudio.google.com/embed/reporting/27c09c89-3b08-46f8-bc49-db0d6e60c3fe/page/p_kbyrml84yd', auto:true, immersive:false },
+      home:    { url: 'https://datastudio.google.com/embed/reporting/c3341ade-526b-4ef1-8f77-e04e885ccf81/page/p_7ie80j9qzd', auto:true, immersive:false },
+      temp:    { url: 'https://datastudio.google.com/embed/reporting/a9247f37-fc30-425b-a648-1c360e725914/page/p_2o3y60glyd', auto:true, immersive:false },
+      school:  { url: 'https://datastudio.google.com/embed/reporting/e56ad71b-8c4c-4a59-88fa-99e773c8809a/page/p_20w8aknpyd', auto:true, immersive:false },
+      finance: { url: 'https://datastudio.google.com/embed/reporting/27c09c89-3b08-46f8-bc49-db0d6e60c3fe/page/p_o097sqvuzd', auto:true, immersive:false },
       schedule:{ url: 'https://alleshokai-gif.github.io/signage-assets/calendar', auto:true, immersive:true }, // ★ここ
       game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan', auto:false, immersive:true },
     };
@@ -1071,24 +1071,23 @@
     const SUB = {
       school: [
         { label:'給食/予定',  iconImg:'ICON_schoolTOP.png', page:'school' },      // 既存PAGES.school
-        { label:'学級閉鎖', iconImg:'ICON_shoolclose.png', url:'https://lookerstudio.google.com/embed/reporting/543880b2-7b47-4237-8f34-a38f5a8da822/page/p_o5u8y9pt0d' },
-        { label:'閉鎖マップ', iconImg:'ICON_schoolcloseMAP.png', url:'https://lookerstudio.google.com/embed/reporting/ac202568-eb4b-409a-8436-2766b21221ad/page/p_un4ijj2v0d' },
+        { label:'学級閉鎖', iconImg:'ICON_shoolclose.png', url:'https://datastudio.google.com/embed/reporting/543880b2-7b47-4237-8f34-a38f5a8da822/page/p_o5u8y9pt0d' },
+        { label:'閉鎖マップ', iconImg:'ICON_schoolcloseMAP.png', url:'https://datastudio.google.com/embed/reporting/ac202568-eb4b-409a-8436-2766b21221ad/page/p_un4ijj2v0d' },
       ],
       game: [
         { label:'九九', iconImg:'ICON_gameKUKU.png',  url:'https://alleshokai-gif.github.io/kuku-game/' },
         { label:'筆算', iconImg:'ICON_gameHS.png',  page:'game' },            // 既存PAGES.game(筆算)
         { label:'オセロ', iconImg:'ICON_gamesOTHERO.png',  url:'https://alleshokai-gif.github.io/signage-assets/games/othello/' },
-        { label:'ボンボン分析', iconImg:'ICON_bonbon.png', url:'https://lookerstudio.google.com/embed/reporting/5e1dd718-4c59-4f7f-b380-9af4b919003e/page/p_fhnahkeo0d' },
       ],
       finance: [
         { label:'家計ダッシュ', iconImg:'ICON_financeTOP.png', page:'finance' },  // 既存PAGES.finance
-        { label:'ピックアップ経費', iconImg:'ICON_financePIC.png', url:'https://lookerstudio.google.com/embed/reporting/9fb4191b-bed4-4c43-8609-2d54b25bddcb/page/p_sd2wt4noyd' },
+        { label:'ピックアップ経費', iconImg:'ICON_financePIC.png', url:'https://datastudio.google.com/embed/reporting/9fb4191b-bed4-4c43-8609-2d54b25bddcb/page/p_sd2wt4noyd' },
         { label:'経費推移1', iconImg:'ICON_financePIC.png', url:'https://datastudio.google.com/embed/reporting/91a0076b-45e1-46d2-8930-3fcfd569f868/page/20zwF' },
         { label:'経費推移2', iconImg:'ICON_financePIC.png', url:'https://datastudio.google.com/embed/reporting/ea48937f-ee9b-4956-a15e-ecaea0310371/page/20zwF' },
         { label:'経費推移3', iconImg:'ICON_financePIC.png', url:'https://datastudio.google.com/embed/reporting/acc834cd-ab48-4ea9-a20e-f17a602b234c/page/20zwF' },
-        { label:'光熱費', iconImg:'ICON_financeUTILITY.png', url:'https://lookerstudio.google.com/embed/reporting/fe2966db-7911-4345-9bb9-e7f20ce67f1e/page/p_kbyrml84yd' },
-        { label:'ベンダーランク', iconImg:'ICON_financeVR.png', url:'https://lookerstudio.google.com/embed/reporting/7aa1e911-8971-4724-aea3-731a3290eb97/page/p_vdxclf0zzd' },
-        { label:'支出ランク', iconImg:'ICON_financeAmtR.png', url:'https://lookerstudio.google.com/embed/reporting/a9e7808d-828d-4c1f-8317-5adc3e44386f/page/p_4s4wd13m0d' },
+        { label:'光熱費', iconImg:'ICON_financeUTILITY.png', url:'https://datastudio.google.com/embed/reporting/fe2966db-7911-4345-9bb9-e7f20ce67f1e/page/p_kbyrml84yd' },
+        { label:'ベンダーランク', iconImg:'ICON_financeVR.png', url:'https://datastudio.google.com/embed/reporting/7aa1e911-8971-4724-aea3-731a3290eb97/page/p_vdxclf0zzd' },
+        { label:'支出ランク', iconImg:'ICON_financeAmtR.png', url:'https://datastudio.google.com/embed/reporting/a9e7808d-828d-4c1f-8317-5adc3e44386f/page/p_4s4wd13m0d' },
       ],
     };
 
