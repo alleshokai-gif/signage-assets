@@ -643,6 +643,15 @@
       });
     }
 
+    /**
+    * @deprecated 旧voices方式の互換関数。
+    *
+    * 現在の本線は requestRadioItems(reason)。
+    * 新方式では GAS API から items 配列を受け取り、WAV/TTS混在で再生する。
+    *
+    * この関数は旧 voices 配列用。
+    * 既存呼び出しが残っていないことを確認できたら削除候補。
+    */
     async function requestVoiceQueue(reason){
       try{
         setToast('VOICE REQ... (' + reason + ')');
@@ -793,6 +802,14 @@
       }
     }
 
+    /**
+   * 現行のRadio Items API呼び出し。
+   *
+   * GAS_API_URL に reason を付けて呼び出し、
+   * res.items を playRadioQueue(items) で再生する。
+   *
+   * items方式では WAV と TTS を混在して扱える。
+   */
     async function requestRadioItems(reason){
       try{
         const url = GAS_API_URL + '?reason=' + encodeURIComponent(reason || '');
