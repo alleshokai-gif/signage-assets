@@ -652,6 +652,12 @@
     * この関数は旧 voices 配列用。
     * 既存呼び出しが残っていないことを確認できたら削除候補。
     */
+   /**
+   * @deprecated 旧 voices方式のフロント関数。
+   *
+   * 現在の本線は requestRadioItems()。
+   * 2026-06時点で呼び出し元なし。削除候補。
+   */
     async function requestVoiceQueue(reason){
       try{
         setToast('VOICE REQ... (' + reason + ')');
