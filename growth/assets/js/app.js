@@ -11,6 +11,21 @@ const state = {
 };
 
 const els = {};
+const JSONP_TIMEOUT_MS = 15000;
+let growthDataTimeoutId = null;
+
+window.handleGrowthData = function(data) {
+  console.log("handleGrowthData called", data);
+  console.log("children count", data.children?.length);
+
+  if (growthDataTimeoutId) {
+    clearTimeout(growthDataTimeoutId);
+    growthDataTimeoutId = null;
+  }
+
+  showMessage("", "");
+  initialize(data);
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   bindElements();
@@ -60,15 +75,20 @@ function loadGrowthData() {
   script.src = url;
   script.async = true;
   script.onerror = () => {
+    if (growthDataTimeoutId) {
+      clearTimeout(growthDataTimeoutId);
+      growthDataTimeoutId = null;
+    }
     handleGrowthDataError(new Error("JSONP load failed"));
   };
 
+  growthDataTimeoutId = setTimeout(() => {
+    growthDataTimeoutId = null;
+    handleGrowthDataError(new Error("JSONP callback timed out"));
+  }, JSONP_TIMEOUT_MS);
+
   document.head.appendChild(script);
 }
-
-window.handleGrowthData = function(data) {
-  initialize(data);
-};
 
 function initialize(payload) {
   try {
