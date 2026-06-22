@@ -150,7 +150,7 @@ function buildChildrenFromRecords(records) {
 
 function normalizeChild(child, index) {
   const birthDate = child.birthDate || child.birth_date || "";
-  const measurements = Array.isArray(child.measurements) ? child.measurements : [];
+  const measurements = Array.isArray(child.measurements) ? child.measurements : Array.isArray(child.rows) ? child.rows : [];
 
   return {
     id: String(child.id || child.childId || child.name || `child-${index + 1}`),
@@ -162,7 +162,7 @@ function normalizeChild(child, index) {
 }
 
 function normalizeMeasurement(row, birthDate) {
-  const date = row.date || row.measuredAt || row.measured_at || row.measurementDate || "";
+  const date = row.date || row.recordDate || row.record_date || row.measuredAt || row.measured_at || row.measurementDate || "";
   const ageMonths = numberOrNull(row.ageMonths ?? row.age_months ?? row.months ?? calculateAgeMonths(birthDate, date));
   const height = numberOrNull(row.height ?? row.heightCm ?? row.height_cm);
   const weight = numberOrNull(row.weight ?? row.weightKg ?? row.weight_kg);
