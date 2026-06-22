@@ -1,5 +1,7 @@
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwwQ3VgW4YP2oKBWn0yBnkAn4mmv9e4qSKAp73Nz8GZ3Ziuy9Q7d97y1t2jJOriGO_KTA/exec";
 
+console.log("growth app loaded");
+
 const state = {
   children: [],
   curves: { height: [], weight: [] },
@@ -46,17 +48,30 @@ function bindEvents() {
   });
 }
 
-async function loadGrowthData() {
+function loadGrowthData() {
   setStatus("読み込み中");
   showMessage("", "");
 
-  try {
-    const response = await fetch(GAS_API_URL, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+  const url = GAS_API_URL + "?callback=handleGrowthData";
+  const script = document.createElement("script");
 
-    const payload = await response.json();
+  console.log("JSONP loading", url);
+
+  script.src = url;
+  script.async = true;
+  script.onerror = () => {
+    handleGrowthDataError(new Error("JSONP load failed"));
+  };
+
+  document.head.appendChild(script);
+}
+
+window.handleGrowthData = function(data) {
+  initialize(data);
+};
+
+function initialize(payload) {
+  try {
     const normalized = normalizePayload(payload);
 
     if (!normalized.children.length) {
@@ -70,14 +85,18 @@ async function loadGrowthData() {
     render();
     setStatus("読み込み完了");
   } catch (error) {
-    setStatus("取得失敗", true);
-    showMessage(
-      "データ取得失敗",
-      `GAS APIから成長データを取得できませんでした。GAS_API_URLとWebアプリの公開設定を確認してください。詳細: ${error.message}`
-    );
-    els.childSelect.innerHTML = '<option value="">取得失敗</option>';
-    els.childSelect.disabled = true;
+    handleGrowthDataError(error);
   }
+}
+
+function handleGrowthDataError(error) {
+  setStatus("取得失敗", true);
+  showMessage(
+    "データ取得失敗",
+    `GAS APIから成長データを取得できませんでした。GAS_API_URLとWebアプリの公開設定を確認してください。詳細: ${error.message}`
+  );
+  els.childSelect.innerHTML = '<option value="">取得失敗</option>';
+  els.childSelect.disabled = true;
 }
 
 function normalizePayload(payload) {
