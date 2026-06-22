@@ -1,7 +1,5 @@
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwwQ3VgW4YP2oKBWn0yBnkAn4mmv9e4qSKAp73Nz8GZ3Ziuy9Q7d97y1t2jJOriGO_KTA/exec";
 
-console.log("growth app loaded");
-
 const state = {
   children: [],
   curves: { height: [], weight: [] },
@@ -15,9 +13,6 @@ const JSONP_TIMEOUT_MS = 15000;
 let growthDataTimeoutId = null;
 
 window.handleGrowthData = function(data) {
-  console.log("handleGrowthData called", data);
-  console.log("children count", data.children?.length);
-
   if (growthDataTimeoutId) {
     clearTimeout(growthDataTimeoutId);
     growthDataTimeoutId = null;
@@ -70,8 +65,6 @@ function loadGrowthData() {
   const url = GAS_API_URL + "?callback=handleGrowthData";
   const script = document.createElement("script");
 
-  console.log("JSONP loading", url);
-
   script.src = url;
   script.async = true;
   script.onerror = () => {
@@ -123,7 +116,7 @@ function normalizePayload(payload) {
   const source = payload && payload.data ? payload.data : payload;
   const rawChildren = Array.isArray(source.children) ? source.children : buildChildrenFromRecords(source.records || source.measurements || []);
   const children = rawChildren.map(normalizeChild).filter((child) => child.measurements.length);
-  const curves = normalizeCurves(source.sds || source.sdsCurves || source.curves || {});
+  const curves = normalizeCurves(source.sds || source.sdsCurves || source.curves || {}, source.rows || []);
 
   return { children, curves };
 }
@@ -176,11 +169,50 @@ function normalizeMeasurement(row, birthDate) {
   return { date, ageMonths, height, weight, heightSds, weightSds };
 }
 
-function normalizeCurves(rawCurves) {
-  return {
+function normalizeCurves(rawCurves, rows) {
+  const structuredCurves = {
     height: normalizeMetricCurves(rawCurves.height || rawCurves.heightCm || rawCurves.stature || []),
     weight: normalizeMetricCurves(rawCurves.weight || rawCurves.weightKg || [])
   };
+  const rowCurves = normalizeCurvesFromRows(rows);
+
+  return {
+    height: structuredCurves.height.length ? structuredCurves.height : rowCurves.height,
+    weight: structuredCurves.weight.length ? structuredCurves.weight : rowCurves.weight
+  };
+}
+
+function normalizeCurvesFromRows(rows) {
+  const curveSpecs = {
+    height: [
+      { key: "height_m2sd", sds: -2 },
+      { key: "height_m1sd", sds: -1 },
+      { key: "height_mean", sds: 0 },
+      { key: "height_p1sd", sds: 1 },
+      { key: "height_p2sd", sds: 2 }
+    ],
+    weight: [
+      { key: "weight_m2sd", sds: -2 },
+      { key: "weight_m1sd", sds: -1 },
+      { key: "weight_mean", sds: 0 },
+      { key: "weight_p1sd", sds: 1 },
+      { key: "weight_p2sd", sds: 2 }
+    ]
+  };
+  const sourceRows = Array.isArray(rows) ? rows : [];
+
+  return Object.fromEntries(Object.entries(curveSpecs).map(([metric, specs]) => [
+    metric,
+    specs.map((spec) => ({
+      label: formatSdsLabel(spec.sds),
+      sds: spec.sds,
+      points: sourceRows.map((row) => {
+        const ageMonths = numberOrNull(row.ageMonths ?? row.age_months ?? row.months ?? row.month ?? row.x);
+        const value = numberOrNull(row[spec.key]);
+        return ageMonths === null || value === null ? null : { x: ageMonths, y: value };
+      }).filter(Boolean).sort((a, b) => a.x - b.x)
+    })).filter((curve) => curve.points.length)
+  ]));
 }
 
 function normalizeMetricCurves(raw) {
@@ -293,13 +325,13 @@ function renderChart(child) {
 
 function buildCurveDatasets(metric, labelPrefix, yAxisID) {
   const palette = {
-    "-3": "#cbd5e1",
-    "-2": "#94a3b8",
-    "-1": "#64748b",
-    "0": "#334155",
-    "1": "#64748b",
-    "2": "#94a3b8",
-    "3": "#cbd5e1"
+    "-3": "#e2e8f0",
+    "-2": "#cbd5e1",
+    "-1": "#94a3b8",
+    "0": "#475569",
+    "1": "#94a3b8",
+    "2": "#cbd5e1",
+    "3": "#e2e8f0"
   };
 
   return state.curves[metric].map((curve) => ({
@@ -354,10 +386,19 @@ function buildScales() {
   };
 
   if (state.mode === "both") {
+    scales.y.min = 40;
+    scales.y.max = 165;
     scales.y1 = {
       position: "right",
       title: { display: true, text: "体重 kg" },
-      beginAtZero: false,
+      min: 0,
+      max: 125,
+      ticks: {
+        stepSize: 10,
+        callback(value) {
+          return Number(value) <= 70 ? value : "";
+        }
+      },
       grid: { drawOnChartArea: false }
     };
   }
