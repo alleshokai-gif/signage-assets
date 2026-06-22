@@ -115,8 +115,8 @@ function handleGrowthDataError(error) {
 function normalizePayload(payload) {
   const source = payload && payload.data ? payload.data : payload;
   const rawChildren = Array.isArray(source.children) ? source.children : buildChildrenFromRecords(source.records || source.measurements || []);
-  const children = rawChildren.map(normalizeChild).filter((child) => child.measurements.length);
   const curves = normalizeCurves(source.sds || source.sdsCurves || source.curves || {}, source.rows || []);
+  const children = rawChildren.map((child, index) => normalizeChild(child, index, curves)).filter((child) => child.measurements.length);
 
   return { children, curves };
 }
@@ -141,15 +141,17 @@ function buildChildrenFromRecords(records) {
   return Array.from(map.values());
 }
 
-function normalizeChild(child, index) {
+function normalizeChild(child, index, fallbackCurves) {
   const birthDate = child.birthDate || child.birth_date || "";
   const measurements = Array.isArray(child.measurements) ? child.measurements : Array.isArray(child.rows) ? child.rows : [];
+  const curves = normalizeCurves(child.sds || child.sdsCurves || child.curves || {}, measurements);
 
   return {
     id: String(child.id || child.childId || child.name || `child-${index + 1}`),
     name: child.name || child.childName || `子供${index + 1}`,
     sex: child.sex || child.gender || "",
     birthDate,
+    curves: hasCurveData(curves) ? curves : fallbackCurves,
     measurements: measurements.map((row) => normalizeMeasurement(row, birthDate)).filter(Boolean).sort((a, b) => a.ageMonths - b.ageMonths)
   };
 }
@@ -180,6 +182,10 @@ function normalizeCurves(rawCurves, rows) {
     height: structuredCurves.height.length ? structuredCurves.height : rowCurves.height,
     weight: structuredCurves.weight.length ? structuredCurves.weight : rowCurves.weight
   };
+}
+
+function hasCurveData(curves) {
+  return Boolean(curves && ((curves.height && curves.height.length) || (curves.weight && curves.weight.length)));
 }
 
 function normalizeCurvesFromRows(rows) {
@@ -282,13 +288,14 @@ function renderChart(child) {
   els.chartTitle.textContent = `${child.name} - ${metricLabel}`;
 
   const datasets = [];
+  const curves = child.curves || state.curves;
   if (state.mode === "height" || state.mode === "both") {
-    datasets.push(...buildCurveDatasets("height", "身長SDS", "y"));
+    datasets.push(...buildCurveDatasets(curves, "height", "身長SDS", "y"));
     datasets.push(buildMeasurementDataset(child.measurements, "height", "身長", "#2563eb", "y"));
   }
 
   if (state.mode === "weight" || state.mode === "both") {
-    datasets.push(...buildCurveDatasets("weight", "体重SDS", state.mode === "both" ? "y1" : "y"));
+    datasets.push(...buildCurveDatasets(curves, "weight", "体重SDS", state.mode === "both" ? "y1" : "y"));
     datasets.push(buildMeasurementDataset(child.measurements, "weight", "体重", "#f97316", state.mode === "both" ? "y1" : "y"));
   }
 
@@ -318,12 +325,12 @@ function renderChart(child) {
           }
         }
       },
-      scales: buildScales()
+      scales: buildScales(datasets)
     }
   });
 }
 
-function buildCurveDatasets(metric, labelPrefix, yAxisID) {
+function buildCurveDatasets(curves, metric, labelPrefix, yAxisID) {
   const palette = {
     "-3": "#e2e8f0",
     "-2": "#cbd5e1",
@@ -333,8 +340,9 @@ function buildCurveDatasets(metric, labelPrefix, yAxisID) {
     "2": "#cbd5e1",
     "3": "#e2e8f0"
   };
+  const metricCurves = curves && Array.isArray(curves[metric]) ? curves[metric] : [];
 
-  return state.curves[metric].map((curve) => ({
+  return metricCurves.map((curve) => ({
     label: `${labelPrefix} ${curve.label}`,
     data: curve.points,
     borderColor: palette[String(curve.sds)] || "#94a3b8",
@@ -368,7 +376,7 @@ function buildMeasurementDataset(measurements, metric, label, color, yAxisID) {
   };
 }
 
-function buildScales() {
+function buildScales(datasets) {
   const scales = {
     x: {
       type: "linear",
@@ -385,9 +393,11 @@ function buildScales() {
     }
   };
 
+  if (state.mode === "height" || state.mode === "both") {
+    Object.assign(scales.y, buildAxisBounds(datasets, "y"));
+  }
+
   if (state.mode === "both") {
-    scales.y.min = 40;
-    scales.y.max = 165;
     scales.y1 = {
       position: "right",
       title: { display: true, text: "体重 kg" },
@@ -404,6 +414,26 @@ function buildScales() {
   }
 
   return scales;
+}
+
+function buildAxisBounds(datasets, yAxisID) {
+  const values = datasets
+    .filter((dataset) => dataset.yAxisID === yAxisID)
+    .flatMap((dataset) => dataset.data.map((point) => point.y))
+    .filter((value) => Number.isFinite(value));
+
+  if (!values.length) {
+    return {};
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const padding = Math.max(2, (max - min) * 0.06);
+
+  return {
+    min: Math.max(0, Math.floor((min - padding) / 5) * 5),
+    max: Math.ceil((max + padding) / 5) * 5
+  };
 }
 
 function setStatus(text, isError = false) {
