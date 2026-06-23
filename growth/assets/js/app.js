@@ -534,14 +534,15 @@ function renderCompareChart() {
 
   const metric = COMPARE_METRICS[state.compareMode] || COMPARE_METRICS.height;
   const children = getSelectedCompareChildren();
-  const datasets = children.map((child, index) => buildCompareMeasurementDataset(child, metric, index)).filter(Boolean);
+  const sdsState = getCompareSdsState(children, state.compareMode);
+  const sdsDatasets = sdsState.visible ? buildCompareSdsDatasets(sdsState.curves) : [];
+  const measurementDatasets = children.map((child, index) => buildCompareMeasurementDataset(child, metric, index)).filter(Boolean);
+  const datasets = [...sdsDatasets, ...measurementDatasets];
   const selectedCount = state.compareSelectedChildIds.length;
 
-  els.compareChartTitle.textContent = `${metric.label}比較`;
-  els.compareNote.textContent = datasets.length
-    ? `${datasets.length}人の実測値を表示`
-    : "比較する子供を選択してください";
   els.compareWarning.hidden = selectedCount <= 3;
+  els.compareChartTitle.textContent = `${metric.label}比較`;
+  els.compareNote.textContent = getCompareNote(measurementDatasets.length, sdsState);
 
   if (state.chart) {
     state.chart.destroy();
@@ -556,8 +557,18 @@ function renderCompareChart() {
       interaction: { mode: "nearest", intersect: false },
       parsing: false,
       plugins: {
-        legend: { position: "bottom" },
+        legend: {
+          position: "bottom",
+          labels: {
+            filter(item, data) {
+              return !data.datasets[item.datasetIndex].isCompareSds;
+            }
+          }
+        },
         tooltip: {
+          filter(item) {
+            return item.dataset.isCompareMeasurement;
+          },
           callbacks: {
             title(items) {
               const point = items[0].raw;
@@ -580,6 +591,81 @@ function getSelectedCompareChildren() {
   return state.compareSelectedChildIds
     .map((id) => state.children.find((child) => child.id === id))
     .filter(Boolean);
+}
+
+function getCompareNote(measurementCount, sdsState) {
+  if (!measurementCount) {
+    return "比較する子供を選択してください";
+  }
+  if (sdsState.reason) {
+    return sdsState.reason;
+  }
+  return `${measurementCount}人の実測値を表示 / SDS帯は背景に表示`;
+}
+
+function getCompareSdsState(children, metricKey) {
+  if (!children.length) {
+    return { visible: false, curves: null, reason: "" };
+  }
+
+  const sexKeys = children.map((child) => normalizeSexKey(child.sex));
+  if (sexKeys.some((sex) => !sex)) {
+    return { visible: false, curves: null, reason: "性別が判定できないためSDS帯は非表示" };
+  }
+
+  if (new Set(sexKeys).size > 1) {
+    return { visible: false, curves: null, reason: "男女混在のためSDS帯は非表示" };
+  }
+
+  const curves = getChildCurvesForCompare(children[0], metricKey);
+  return curves.length
+    ? { visible: true, curves, reason: "" }
+    : { visible: false, curves: null, reason: "SDS帯データなし" };
+}
+
+function normalizeSexKey(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (["1", "male", "m", "boy", "男", "男子"].includes(text)) {
+    return "male";
+  }
+  if (["0", "female", "f", "girl", "女", "女子"].includes(text)) {
+    return "female";
+  }
+  return "";
+}
+
+function getChildCurvesForCompare(child, metricKey) {
+  const curves = child.curves || state.curves;
+  return curves && Array.isArray(curves[metricKey]) ? curves[metricKey] : [];
+}
+
+function buildCompareSdsDatasets(curves) {
+  const orderedCurves = [-2, -1, 0, 1, 2]
+    .map((sds) => findSdsCurve(curves, sds))
+    .filter(Boolean);
+
+  if (orderedCurves.length < 2) {
+    return [];
+  }
+
+  return orderedCurves.map((curve, index) => ({
+    label: `SDS ${curve.label}`,
+    data: curve.points,
+    borderColor: curve.sds === 0 ? "rgba(100, 116, 139, 0.45)" : "rgba(148, 163, 184, 0)",
+    backgroundColor: index === 0 ? "rgba(148, 163, 184, 0)" : "rgba(148, 163, 184, 0.08)",
+    borderWidth: curve.sds === 0 ? 1 : 0,
+    fill: index === 0 ? false : "-1",
+    pointRadius: 0,
+    pointHitRadius: 0,
+    tension: 0.25,
+    yAxisID: "y",
+    isCompareSds: true,
+    order: 20
+  }));
+}
+
+function findSdsCurve(curves, sds) {
+  return curves.find((curve) => curve.sds === sds);
 }
 
 function buildCompareMeasurementDataset(child, metric, index) {
@@ -607,7 +693,9 @@ function buildCompareMeasurementDataset(child, metric, index) {
     pointRadius: 4,
     pointHoverRadius: 6,
     tension: 0.2,
-    yAxisID: "y"
+    yAxisID: "y",
+    isCompareMeasurement: true,
+    order: 1
   };
 }
 
