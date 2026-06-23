@@ -6,7 +6,7 @@
   <title>成長曲線</title>
   <link rel="stylesheet" href="assets/css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js" defer></script>
-  <script src="assets/js/app.js?v=20260623-3" defer></script>
+  <script src="assets/js/app.js?v=20260623-4" defer></script>
 </head>
 <body>
   <main class="app-shell">
@@ -20,6 +20,7 @@
 
     <nav class="main-tabs" aria-label="メニュー">
       <button class="main-tab is-active" type="button" data-view="chart">グラフ</button>
+      <button class="main-tab" type="button" data-view="compare">比較</button>
       <button class="main-tab" type="button" data-view="input">入力</button>
     </nav>
 
@@ -98,10 +99,8 @@
           <span>性別</span>
           <select id="childSexInput" required>
             <option value="">選択してください</option>
-            <option value="male">male</option>
-            <option value="female">female</option>
-            <option value="1">1</option>
-            <option value="0">0</option>
+            <option value="1">男</option>
+            <option value="0">女</option>
           </select>
         </label>
 
@@ -158,6 +157,39 @@
       </div>
       <div class="chart-wrap">
         <canvas id="growthChart"></canvas>
+      </div>
+    </section>
+
+    <section class="control-panel compare-view" aria-label="比較設定" hidden>
+      <fieldset class="mode-switch" aria-label="比較モード">
+        <legend>比較項目</legend>
+        <label>
+          <input type="radio" name="compareMode" value="height" checked>
+          <span>身長</span>
+        </label>
+        <label>
+          <input type="radio" name="compareMode" value="weight">
+          <span>体重</span>
+        </label>
+      </fieldset>
+
+      <fieldset class="compare-picker" aria-label="比較する子供">
+        <legend>子供を比較</legend>
+        <div class="compare-children" id="compareChildren"></div>
+      </fieldset>
+    </section>
+
+    <section class="compare-warning compare-view" id="compareWarning" hidden>
+      比較対象が多いとスマホでは線が重なって見づらくなる場合があります。
+    </section>
+
+    <section class="chart-panel compare-view" aria-label="比較グラフ" hidden>
+      <div class="chart-header">
+        <h2 id="compareChartTitle">身長比較</h2>
+        <p id="compareNote">実測値のみを表示</p>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="compareChart"></canvas>
       </div>
     </section>
 

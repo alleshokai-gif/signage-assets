@@ -5,6 +5,8 @@ const state = {
   curves: { height: [], weight: [] },
   selectedChildId: "",
   mode: "height",
+  compareMode: "height",
+  compareSelectedChildIds: [],
   chart: null,
   currentView: "chart",
   inputView: "measurement",
@@ -15,6 +17,21 @@ const state = {
 const els = {};
 const JSONP_TIMEOUT_MS = 15000;
 let growthDataTimeoutId = null;
+
+const COMPARE_METRICS = {
+  height: {
+    label: "身長",
+    unit: "cm",
+    getValue: (row) => row.height
+  },
+  weight: {
+    label: "体重",
+    unit: "kg",
+    getValue: (row) => row.weight
+  }
+};
+
+const COMPARE_COLORS = ["#2563eb", "#f97316", "#16a34a", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"];
 
 window.handleGrowthData = function(data) {
   if (growthDataTimeoutId) {
@@ -37,10 +54,14 @@ function bindElements() {
   els.mainTabs = Array.from(document.querySelectorAll(".main-tab"));
   els.subTabs = Array.from(document.querySelectorAll(".sub-tab"));
   els.chartViews = Array.from(document.querySelectorAll(".chart-view"));
+  els.compareViews = Array.from(document.querySelectorAll(".compare-view"));
   els.inputViews = Array.from(document.querySelectorAll(".input-view"));
   els.childSelect = document.getElementById("childSelect");
   els.measurementChildSelect = document.getElementById("measurementChildSelect");
   els.modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
+  els.compareModeInputs = Array.from(document.querySelectorAll('input[name="compareMode"]'));
+  els.compareChildren = document.getElementById("compareChildren");
+  els.compareWarning = document.getElementById("compareWarning");
   els.measurementForm = document.getElementById("measurementForm");
   els.childForm = document.getElementById("childForm");
   els.measurementDate = document.getElementById("measurementDate");
@@ -57,6 +78,9 @@ function bindElements() {
   els.chartTitle = document.getElementById("chartTitle");
   els.curveNote = document.getElementById("curveNote");
   els.chartCanvas = document.getElementById("growthChart");
+  els.compareChartTitle = document.getElementById("compareChartTitle");
+  els.compareNote = document.getElementById("compareNote");
+  els.compareChartCanvas = document.getElementById("compareChart");
   els.messagePanel = document.getElementById("messagePanel");
   els.messageTitle = document.getElementById("messageTitle");
   els.messageBody = document.getElementById("messageBody");
@@ -100,6 +124,27 @@ function bindEvents() {
       state.mode = input.value;
       render();
     });
+  });
+
+  els.compareModeInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      state.compareMode = input.value;
+      renderCompareChart();
+    });
+  });
+
+  els.compareChildren.addEventListener("change", (event) => {
+    if (!event.target.matches('input[type="checkbox"][data-compare-child-id]')) {
+      return;
+    }
+
+    const childId = event.target.dataset.compareChildId;
+    if (event.target.checked) {
+      state.compareSelectedChildIds = Array.from(new Set([...state.compareSelectedChildIds, childId]));
+    } else {
+      state.compareSelectedChildIds = state.compareSelectedChildIds.filter((id) => id !== childId);
+    }
+    renderCompareChart();
   });
 
   els.measurementForm.addEventListener("submit", handleMeasurementSubmit);
@@ -157,8 +202,10 @@ function initialize(payload) {
     state.selectedChildId = state.children.some((child) => child.id === previousSelectedChildId)
       ? previousSelectedChildId
       : state.children[0].id;
+    state.compareSelectedChildIds = getInitialCompareChildIds(state.children, state.compareSelectedChildIds);
     state.pendingSelectedChildId = "";
     populateChildSelect();
+    populateCompareChildren();
     render();
     renderView();
     setStatus("読み込み完了");
@@ -322,6 +369,29 @@ function populateChildSelect() {
   els.measurementChildSelect.disabled = false;
 }
 
+function populateCompareChildren() {
+  els.compareChildren.innerHTML = state.children.map((child) => {
+    const hasData = hasAnyMeasurementValue(child);
+    const checked = state.compareSelectedChildIds.includes(child.id);
+    return `
+      <label class="compare-child-option${hasData ? "" : " is-disabled"}">
+        <input type="checkbox" data-compare-child-id="${escapeHtml(child.id)}"${checked ? " checked" : ""}${hasData ? "" : " disabled"}>
+        <span>${escapeHtml(child.name)}</span>
+      </label>
+    `;
+  }).join("");
+}
+
+function getInitialCompareChildIds(children, previousIds) {
+  const availableIds = children.filter(hasAnyMeasurementValue).map((child) => child.id);
+  const retainedIds = previousIds.filter((id) => availableIds.includes(id));
+  return retainedIds.length ? retainedIds : availableIds.slice(0, 3);
+}
+
+function hasAnyMeasurementValue(child) {
+  return child.measurements.some((row) => row.height !== null || row.weight !== null);
+}
+
 function render() {
   const child = getSelectedChild();
   if (!child) {
@@ -329,7 +399,11 @@ function render() {
   }
 
   updateSummary(child);
-  renderChart(child);
+  if (state.currentView === "compare") {
+    renderCompareChart();
+  } else {
+    renderChart(child);
+  }
 }
 
 function getSelectedChild() {
@@ -453,19 +527,134 @@ function buildMeasurementDataset(measurements, metric, label, color, yAxisID) {
   };
 }
 
+function renderCompareChart() {
+  if (!els.compareChartCanvas) {
+    return;
+  }
+
+  const metric = COMPARE_METRICS[state.compareMode] || COMPARE_METRICS.height;
+  const children = getSelectedCompareChildren();
+  const datasets = children.map((child, index) => buildCompareMeasurementDataset(child, metric, index)).filter(Boolean);
+  const selectedCount = state.compareSelectedChildIds.length;
+
+  els.compareChartTitle.textContent = `${metric.label}比較`;
+  els.compareNote.textContent = datasets.length
+    ? `${datasets.length}人の実測値を表示`
+    : "比較する子供を選択してください";
+  els.compareWarning.hidden = selectedCount <= 3;
+
+  if (state.chart) {
+    state.chart.destroy();
+  }
+
+  state.chart = new Chart(els.compareChartCanvas, {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "nearest", intersect: false },
+      parsing: false,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: {
+          callbacks: {
+            title(items) {
+              const point = items[0].raw;
+              return `${point.childName} / ${formatAge(point.x)}`;
+            },
+            label(item) {
+              const point = item.raw;
+              const value = Number.isFinite(point.y) ? `${point.y.toFixed(1)} ${metric.unit}` : "-";
+              return [`測定日: ${point.date || "-"}`, `${metric.label}: ${value}`];
+            }
+          }
+        }
+      },
+      scales: buildCompareScales(datasets, metric)
+    }
+  });
+}
+
+function getSelectedCompareChildren() {
+  return state.compareSelectedChildIds
+    .map((id) => state.children.find((child) => child.id === id))
+    .filter(Boolean);
+}
+
+function buildCompareMeasurementDataset(child, metric, index) {
+  const color = COMPARE_COLORS[index % COMPARE_COLORS.length];
+  const data = child.measurements.map((row) => {
+    const value = metric.getValue(row);
+    return value === null ? null : {
+      x: row.ageMonths,
+      y: value,
+      date: row.date,
+      childName: child.name
+    };
+  }).filter(Boolean);
+
+  if (!data.length) {
+    return null;
+  }
+
+  return {
+    label: child.name,
+    data,
+    borderColor: color,
+    backgroundColor: color,
+    borderWidth: 3,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension: 0.2,
+    yAxisID: "y"
+  };
+}
+
+function buildCompareScales(datasets, metric) {
+  return {
+    x: {
+      type: "linear",
+      title: { display: true, text: "年齢" },
+      ticks: {
+        callback(value) {
+          return formatAge(value);
+        }
+      }
+    },
+    y: {
+      title: { display: true, text: `${metric.label} ${metric.unit}` },
+      beginAtZero: false,
+      ...buildAxisBounds(datasets, "y")
+    }
+  };
+}
+
 function renderView() {
+  const isChart = state.currentView === "chart";
+  const isCompare = state.currentView === "compare";
   const isInput = state.currentView === "input";
 
   els.mainTabs.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.view === state.currentView);
   });
   els.chartViews.forEach((view) => {
-    view.hidden = isInput;
+    view.hidden = !isChart;
+  });
+  els.compareViews.forEach((view) => {
+    view.hidden = !isCompare;
   });
   els.inputViews.forEach((view) => {
     view.hidden = !isInput;
   });
-  renderInputView();
+
+  if (isCompare) {
+    renderCompareChart();
+  } else if (isChart) {
+    render();
+  } else {
+    renderInputView();
+  }
 }
 
 function renderInputView() {
