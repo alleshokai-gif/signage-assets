@@ -53,6 +53,9 @@ const compareSdsBackgroundPlugin = {
     const yScale = chart.scales.y;
 
     ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
     bands.forEach((band) => {
       drawSdsBand(ctx, chartArea, xScale, yScale, band);
     });
