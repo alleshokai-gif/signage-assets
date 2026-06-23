@@ -33,6 +33,32 @@ const COMPARE_METRICS = {
 
 const COMPARE_COLORS = ["#2563eb", "#f97316", "#16a34a", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"];
 
+const COMPARE_SDS_BAND_COLORS = {
+  male: "rgba(37, 99, 235, 0.08)",
+  female: "rgba(219, 39, 119, 0.08)",
+  unknown: "rgba(148, 163, 184, 0.07)"
+};
+
+const compareSdsBackgroundPlugin = {
+  id: "compareSdsBackground",
+  beforeDatasetsDraw(chart, args, options) {
+    const bands = Array.isArray(options?.bands) ? options.bands : [];
+    if (!bands.length || !chart.chartArea || !chart.scales.x || !chart.scales.y) {
+      return;
+    }
+
+    const { ctx, chartArea } = chart;
+    const xScale = chart.scales.x;
+    const yScale = chart.scales.y;
+
+    ctx.save();
+    bands.forEach((band) => {
+      drawSdsBand(ctx, chartArea, xScale, yScale, band);
+    });
+    ctx.restore();
+  }
+};
+
 window.handleGrowthData = function(data) {
   if (growthDataTimeoutId) {
     clearTimeout(growthDataTimeoutId);
@@ -535,9 +561,8 @@ function renderCompareChart() {
   const metric = COMPARE_METRICS[state.compareMode] || COMPARE_METRICS.height;
   const children = getSelectedCompareChildren();
   const sdsState = getCompareSdsState(children, state.compareMode);
-  const sdsDatasets = sdsState.visible ? buildCompareSdsDatasets(sdsState.curves) : [];
   const measurementDatasets = children.map((child, index) => buildCompareMeasurementDataset(child, metric, index)).filter(Boolean);
-  const datasets = [...sdsDatasets, ...measurementDatasets];
+  const datasets = measurementDatasets;
   const selectedCount = state.compareSelectedChildIds.length;
 
   els.compareWarning.hidden = selectedCount <= 3;
@@ -551,6 +576,7 @@ function renderCompareChart() {
   state.chart = new Chart(els.compareChartCanvas, {
     type: "line",
     data: { datasets },
+    plugins: [compareSdsBackgroundPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -558,12 +584,10 @@ function renderCompareChart() {
       parsing: false,
       plugins: {
         legend: {
-          position: "bottom",
-          labels: {
-            filter(item, data) {
-              return !data.datasets[item.datasetIndex].isCompareSds;
-            }
-          }
+          position: "bottom"
+        },
+        compareSdsBackground: {
+          bands: sdsState.bands || []
         },
         tooltip: {
           filter(item) {
@@ -582,7 +606,7 @@ function renderCompareChart() {
           }
         }
       },
-      scales: buildCompareScales(datasets, metric)
+      scales: buildCompareScales(datasets, metric, sdsState.bands || [])
     }
   });
 }
@@ -605,24 +629,24 @@ function getCompareNote(measurementCount, sdsState) {
 
 function getCompareSdsState(children, metricKey) {
   if (!children.length) {
-    return { visible: false, curves: null, reason: "" };
+    return { visible: false, bands: [], reason: "" };
   }
 
   const sexKeys = children.map((child) => normalizeSexKey(child.sex));
-  const curves = getChildCurvesForCompare(children[0], metricKey);
-  if (!curves.length) {
-    return { visible: false, curves: null, reason: "SDS帯データなし" };
+  const bands = buildCompareSdsBands(children, metricKey);
+  if (!bands.length) {
+    return { visible: false, bands: [], reason: "SDS帯データなし" };
   }
 
   if (sexKeys.some((sex) => !sex)) {
-    return { visible: true, curves, reason: "性別が判定できない子供を含むため、SDS帯は参考表示" };
+    return { visible: true, bands, reason: "性別が判定できない子供を含むため、SDS帯は参考表示" };
   }
 
   if (new Set(sexKeys).size > 1) {
-    return { visible: true, curves, reason: "男女混在のため、SDS帯は参考表示" };
+    return { visible: true, bands, reason: "男女混在のため、SDS帯は参考表示" };
   }
 
-  return { visible: true, curves, reason: "" };
+  return { visible: true, bands, reason: "" };
 }
 
 function getRawSexValue(source) {
@@ -654,42 +678,126 @@ function getChildCurvesForCompare(child, metricKey) {
   return curves && Array.isArray(curves[metricKey]) ? curves[metricKey] : [];
 }
 
-function buildCompareSdsDatasets(curves) {
-  const orderedCurves = [-2, -1, 0, 1, 2]
-    .map((sds) => findSdsCurve(curves, sds))
-    .filter(Boolean);
+function buildCompareSdsBands(children, metricKey) {
+  const bands = [];
+  const seenSexes = new Set();
 
-  if (orderedCurves.length < 2) {
-    return [];
-  }
+  children.forEach((child) => {
+    const sexKey = normalizeSexKey(child.sex) || "unknown";
+    if (seenSexes.has(sexKey)) {
+      return;
+    }
 
-  return orderedCurves.map((curve, index) => ({
-    label: `SDS ${curve.label}`,
-    data: curve.points,
-    borderColor: curve.sds === 0 ? "rgba(100, 116, 139, 0.45)" : "rgba(148, 163, 184, 0)",
-    backgroundColor: getCompareSdsBandColor(curve.sds, index),
-    borderWidth: curve.sds === 0 ? 1 : 0,
-    fill: index === 0 ? false : "-1",
-    pointRadius: 0,
-    pointHitRadius: 0,
-    tension: 0.25,
-    yAxisID: "y",
-    isCompareSds: true,
-    order: 20
-  }));
+    const curves = getChildCurvesForCompare(child, metricKey);
+    const lower = findSdsCurve(curves, -1);
+    const upper = findSdsCurve(curves, 1);
+    if (!lower || !upper) {
+      return;
+    }
+
+    seenSexes.add(sexKey);
+    bands.push({
+      sexKey,
+      lower: lower.points,
+      upper: upper.points,
+      color: COMPARE_SDS_BAND_COLORS[sexKey] || COMPARE_SDS_BAND_COLORS.unknown
+    });
+  });
+
+  return bands;
 }
 
 function findSdsCurve(curves, sds) {
   return curves.find((curve) => curve.sds === sds);
 }
 
-function getCompareSdsBandColor(sds, index) {
-  if (index === 0) {
-    return "rgba(148, 163, 184, 0)";
+function drawSdsBand(ctx, chartArea, xScale, yScale, band) {
+  const lower = buildSdsBoundaryPoints(band.lower, xScale, yScale);
+  const upper = buildSdsBoundaryPoints(band.upper, xScale, yScale);
+  if (lower.length < 2 || upper.length < 2) {
+    return;
   }
-  return sds === 0 || sds === 1
-    ? "rgba(37, 99, 235, 0.08)"
-    : "rgba(148, 163, 184, 0.05)";
+
+  ctx.beginPath();
+  upper.forEach((point, index) => {
+    const x = clamp(point.x, chartArea.left, chartArea.right);
+    const y = clamp(point.y, chartArea.top, chartArea.bottom);
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+
+  [...lower].reverse().forEach((point) => {
+    ctx.lineTo(
+      clamp(point.x, chartArea.left, chartArea.right),
+      clamp(point.y, chartArea.top, chartArea.bottom)
+    );
+  });
+
+  ctx.closePath();
+  ctx.fillStyle = band.color;
+  ctx.fill();
+}
+
+function buildSdsBoundaryPoints(points, xScale, yScale) {
+  const minX = numberOrNull(xScale.min);
+  const maxX = numberOrNull(xScale.max);
+  if (minX === null || maxX === null || minX === maxX) {
+    return [];
+  }
+
+  const sorted = (Array.isArray(points) ? points : [])
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+    .sort((a, b) => a.x - b.x);
+
+  if (sorted.length < 2) {
+    return [];
+  }
+
+  const xs = [
+    minX,
+    ...sorted.map((point) => point.x).filter((x) => x > minX && x < maxX),
+    maxX
+  ];
+
+  return xs.map((x) => {
+    const y = interpolateSdsY(sorted, x);
+    return y === null ? null : {
+      x: xScale.getPixelForValue(x),
+      y: yScale.getPixelForValue(y)
+    };
+  }).filter(Boolean);
+}
+
+function interpolateSdsY(points, x) {
+  if (!points.length) {
+    return null;
+  }
+  if (x <= points[0].x) {
+    return points[0].y;
+  }
+
+  const last = points[points.length - 1];
+  if (x >= last.x) {
+    return last.y;
+  }
+
+  for (let index = 1; index < points.length; index += 1) {
+    const left = points[index - 1];
+    const right = points[index];
+    if (x > right.x) {
+      continue;
+    }
+    if (right.x === left.x) {
+      return right.y;
+    }
+    const ratio = (x - left.x) / (right.x - left.x);
+    return left.y + (right.y - left.y) * ratio;
+  }
+
+  return last.y;
 }
 
 function buildCompareMeasurementDataset(child, metric, index) {
@@ -723,7 +831,12 @@ function buildCompareMeasurementDataset(child, metric, index) {
   };
 }
 
-function buildCompareScales(datasets, metric) {
+function buildCompareScales(datasets, metric, sdsBands = []) {
+  const axisDatasets = [
+    ...datasets,
+    ...buildSdsBandAxisDatasets(sdsBands)
+  ];
+
   return {
     x: {
       type: "linear",
@@ -737,9 +850,16 @@ function buildCompareScales(datasets, metric) {
     y: {
       title: { display: true, text: `${metric.label} ${metric.unit}` },
       beginAtZero: false,
-      ...buildAxisBounds(datasets, "y")
+      ...buildAxisBounds(axisDatasets, "y")
     }
   };
+}
+
+function buildSdsBandAxisDatasets(sdsBands) {
+  return (Array.isArray(sdsBands) ? sdsBands : []).flatMap((band) => [
+    { data: band.lower || [], yAxisID: "y" },
+    { data: band.upper || [], yAxisID: "y" }
+  ]);
 }
 
 function renderView() {
@@ -1046,6 +1166,10 @@ function numberOrNull(value) {
 
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function formatAge(months) {
