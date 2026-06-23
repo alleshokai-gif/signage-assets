@@ -5,7 +5,11 @@ const state = {
   curves: { height: [], weight: [] },
   selectedChildId: "",
   mode: "height",
-  chart: null
+  chart: null,
+  currentView: "chart",
+  inputView: "measurement",
+  isSubmitting: false,
+  pendingSelectedChildId: ""
 };
 
 const els = {};
@@ -30,8 +34,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function bindElements() {
   els.status = document.getElementById("status");
+  els.mainTabs = Array.from(document.querySelectorAll(".main-tab"));
+  els.subTabs = Array.from(document.querySelectorAll(".sub-tab"));
+  els.chartViews = Array.from(document.querySelectorAll(".chart-view"));
+  els.inputViews = Array.from(document.querySelectorAll(".input-view"));
   els.childSelect = document.getElementById("childSelect");
+  els.measurementChildSelect = document.getElementById("measurementChildSelect");
   els.modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
+  els.measurementForm = document.getElementById("measurementForm");
+  els.childForm = document.getElementById("childForm");
+  els.measurementDate = document.getElementById("measurementDate");
+  els.heightInput = document.getElementById("heightInput");
+  els.weightInput = document.getElementById("weightInput");
+  els.measurementSubmit = document.getElementById("measurementSubmit");
+  els.childNameInput = document.getElementById("childNameInput");
+  els.childSexInput = document.getElementById("childSexInput");
+  els.childBirthDateInput = document.getElementById("childBirthDateInput");
+  els.fatherHeightInput = document.getElementById("fatherHeightInput");
+  els.motherHeightInput = document.getElementById("motherHeightInput");
+  els.childSubmit = document.getElementById("childSubmit");
+  els.steppers = Array.from(document.querySelectorAll(".stepper"));
   els.chartTitle = document.getElementById("chartTitle");
   els.curveNote = document.getElementById("curveNote");
   els.chartCanvas = document.getElementById("growthChart");
@@ -45,8 +67,31 @@ function bindElements() {
 }
 
 function bindEvents() {
+  els.measurementDate.max = formatDateInputValue(new Date());
+
+  els.mainTabs.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.currentView = button.dataset.view;
+      renderView();
+    });
+  });
+
+  els.subTabs.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.inputView = button.dataset.inputView;
+      renderInputView();
+    });
+  });
+
   els.childSelect.addEventListener("change", () => {
     state.selectedChildId = els.childSelect.value;
+    els.measurementChildSelect.value = state.selectedChildId;
+    render();
+  });
+
+  els.measurementChildSelect.addEventListener("change", () => {
+    state.selectedChildId = els.measurementChildSelect.value;
+    els.childSelect.value = state.selectedChildId;
     render();
   });
 
@@ -54,6 +99,21 @@ function bindEvents() {
     input.addEventListener("change", () => {
       state.mode = input.value;
       render();
+    });
+  });
+
+  els.measurementForm.addEventListener("submit", handleMeasurementSubmit);
+  els.childForm.addEventListener("submit", handleChildSubmit);
+
+  els.steppers.forEach((stepper) => {
+    const input = document.getElementById(stepper.dataset.stepper);
+    const step = Number(stepper.dataset.step || input.step || 1);
+
+    stepper.querySelectorAll("[data-step-direction]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const direction = Number(button.dataset.stepDirection);
+        adjustNumberInput(input, step * direction);
+      });
     });
   });
 }
@@ -85,6 +145,7 @@ function loadGrowthData() {
 
 function initialize(payload) {
   try {
+    const previousSelectedChildId = state.pendingSelectedChildId || state.selectedChildId;
     const normalized = normalizePayload(payload);
 
     if (!normalized.children.length) {
@@ -93,9 +154,13 @@ function initialize(payload) {
 
     state.children = normalized.children;
     state.curves = normalized.curves;
-    state.selectedChildId = state.children[0].id;
+    state.selectedChildId = state.children.some((child) => child.id === previousSelectedChildId)
+      ? previousSelectedChildId
+      : state.children[0].id;
+    state.pendingSelectedChildId = "";
     populateChildSelect();
     render();
+    renderView();
     setStatus("読み込み完了");
   } catch (error) {
     handleGrowthDataError(error);
@@ -116,7 +181,7 @@ function normalizePayload(payload) {
   const source = payload && payload.data ? payload.data : payload;
   const rawChildren = Array.isArray(source.children) ? source.children : buildChildrenFromRecords(source.records || source.measurements || []);
   const curves = normalizeCurves(source.sds || source.sdsCurves || source.curves || {}, source.rows || []);
-  const children = rawChildren.map((child, index) => normalizeChild(child, index, curves)).filter((child) => child.measurements.length);
+  const children = rawChildren.map((child, index) => normalizeChild(child, index, curves));
 
   return { children, curves };
 }
@@ -246,11 +311,15 @@ function normalizeCurvePoints(points) {
 }
 
 function populateChildSelect() {
-  els.childSelect.innerHTML = state.children.map((child) => (
+  const options = state.children.map((child) => (
     `<option value="${escapeHtml(child.id)}">${escapeHtml(child.name)}</option>`
   )).join("");
+  els.childSelect.innerHTML = options;
+  els.measurementChildSelect.innerHTML = options;
   els.childSelect.value = state.selectedChildId;
+  els.measurementChildSelect.value = state.selectedChildId;
   els.childSelect.disabled = false;
+  els.measurementChildSelect.disabled = false;
 }
 
 function render() {
@@ -268,6 +337,14 @@ function getSelectedChild() {
 }
 
 function updateSummary(child) {
+  if (!child.measurements.length) {
+    els.latestDate.textContent = "-";
+    els.latestHeight.textContent = "-";
+    els.latestWeight.textContent = "-";
+    els.latestSds.textContent = "-";
+    return;
+  }
+
   const latest = child.measurements[child.measurements.length - 1];
   els.latestDate.textContent = latest.date || `${formatAge(latest.ageMonths)}`;
   els.latestHeight.textContent = latest.height === null ? "-" : `${latest.height.toFixed(1)} cm`;
@@ -376,6 +453,183 @@ function buildMeasurementDataset(measurements, metric, label, color, yAxisID) {
   };
 }
 
+function renderView() {
+  const isInput = state.currentView === "input";
+
+  els.mainTabs.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.view === state.currentView);
+  });
+  els.chartViews.forEach((view) => {
+    view.hidden = isInput;
+  });
+  els.inputViews.forEach((view) => {
+    view.hidden = !isInput;
+  });
+  renderInputView();
+}
+
+function renderInputView() {
+  els.subTabs.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.inputView === state.inputView);
+  });
+  els.measurementForm.hidden = state.inputView !== "measurement";
+  els.childForm.hidden = state.inputView !== "child";
+}
+
+async function handleMeasurementSubmit(event) {
+  event.preventDefault();
+  if (state.isSubmitting) {
+    return;
+  }
+
+  const payload = {
+    action: "addMeasurement",
+    childId: els.measurementChildSelect.value,
+    measuredDate: els.measurementDate.value,
+    heightCm: els.heightInput.value.trim(),
+    weightKg: els.weightInput.value.trim()
+  };
+  const validationError = validateMeasurementPayload(payload);
+  if (validationError) {
+    showMessage("入力エラー", validationError);
+    return;
+  }
+
+  state.pendingSelectedChildId = payload.childId;
+  await submitGrowthData(payload, () => {
+    els.measurementForm.reset();
+    els.measurementChildSelect.value = state.pendingSelectedChildId;
+  });
+}
+
+async function handleChildSubmit(event) {
+  event.preventDefault();
+  if (state.isSubmitting) {
+    return;
+  }
+
+  const payload = {
+    action: "addChild",
+    name: els.childNameInput.value.trim(),
+    sex: els.childSexInput.value,
+    birthDate: els.childBirthDateInput.value,
+    heightFather: els.fatherHeightInput.value.trim(),
+    heightMother: els.motherHeightInput.value.trim()
+  };
+  const validationError = validateChildPayload(payload);
+  if (validationError) {
+    showMessage("入力エラー", validationError);
+    return;
+  }
+
+  await submitGrowthData(payload, (result) => {
+    els.childForm.reset();
+    if (result.childId) {
+      state.pendingSelectedChildId = String(result.childId);
+    }
+  });
+}
+
+async function submitGrowthData(payload, onSuccess) {
+  setSubmitting(true);
+  showMessage("", "");
+  setStatus("保存中");
+
+  try {
+    const response = await fetch(GAS_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || `HTTP ${response.status}`);
+    }
+
+    if (onSuccess) {
+      onSuccess(result);
+    }
+    setStatus("保存完了");
+    loadGrowthData();
+  } catch (error) {
+    setStatus("保存失敗", true);
+    showMessage("保存失敗", `GASへの送信に失敗しました。詳細: ${error.message}`);
+  } finally {
+    setSubmitting(false);
+  }
+}
+
+function validateMeasurementPayload(payload) {
+  if (!payload.childId) {
+    return "子どもを選択してください。";
+  }
+  if (!payload.measuredDate) {
+    return "測定日を入力してください。";
+  }
+  if (isFutureDate(payload.measuredDate)) {
+    return "測定日は未来日にできません。";
+  }
+  if (payload.heightCm === "" && payload.weightKg === "") {
+    return "身長または体重を入力してください。";
+  }
+  if (payload.heightCm !== "" && numberOrNull(payload.heightCm) === null) {
+    return "身長は数値で入力してください。";
+  }
+  if (payload.weightKg !== "" && numberOrNull(payload.weightKg) === null) {
+    return "体重は数値で入力してください。";
+  }
+  return "";
+}
+
+function validateChildPayload(payload) {
+  if (!payload.name) {
+    return "名前を入力してください。";
+  }
+  if (!payload.sex) {
+    return "性別を選択してください。";
+  }
+  if (!payload.birthDate) {
+    return "生年月日を入力してください。";
+  }
+  if (payload.heightFather !== "" && numberOrNull(payload.heightFather) === null) {
+    return "父身長は数値で入力してください。";
+  }
+  if (payload.heightMother !== "" && numberOrNull(payload.heightMother) === null) {
+    return "母身長は数値で入力してください。";
+  }
+  return "";
+}
+
+function setSubmitting(isSubmitting) {
+  state.isSubmitting = isSubmitting;
+  els.measurementSubmit.disabled = isSubmitting;
+  els.childSubmit.disabled = isSubmitting;
+  els.measurementForm.querySelectorAll("input, select, button").forEach((element) => {
+    element.disabled = isSubmitting;
+  });
+  els.childForm.querySelectorAll("input, select, button").forEach((element) => {
+    element.disabled = isSubmitting;
+  });
+  if (!isSubmitting) {
+    els.measurementChildSelect.disabled = !state.children.length;
+  }
+}
+
+function adjustNumberInput(input, delta) {
+  const current = numberOrNull(input.value) || 0;
+  const next = Math.max(0, Math.round((current + delta) * 10) / 10);
+  input.value = next.toFixed(1);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function isFutureDate(value) {
+  const target = parseLocalDate(value);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return target && target.getTime() > today.getTime();
+}
+
 function buildScales(datasets) {
   const scales = {
     x: {
@@ -463,6 +717,25 @@ function calculateAgeMonths(birthDate, date) {
   const months = measured.getMonth() - born.getMonth();
   const dayOffset = (measured.getDate() - born.getDate()) / 30.4375;
   return Math.max(0, Math.round((years * 12 + months + dayOffset) * 10) / 10);
+}
+
+function parseLocalDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parts = String(value).split("-").map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
+    return null;
+  }
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function formatDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function numberOrNull(value) {

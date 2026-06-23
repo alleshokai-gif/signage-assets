@@ -6,7 +6,7 @@
   <title>成長曲線</title>
   <link rel="stylesheet" href="assets/css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js" defer></script>
-  <script src="assets/js/app.js?v=20260623-2" defer></script>
+  <script src="assets/js/app.js?v=20260623-3" defer></script>
 </head>
 <body>
   <main class="app-shell">
@@ -18,7 +18,12 @@
       <div class="status-pill" id="status">読み込み前</div>
     </header>
 
-    <section class="control-panel" aria-label="表示設定">
+    <nav class="main-tabs" aria-label="メニュー">
+      <button class="main-tab is-active" type="button" data-view="chart">グラフ</button>
+      <button class="main-tab" type="button" data-view="input">入力</button>
+    </nav>
+
+    <section class="control-panel chart-view" aria-label="表示設定">
       <label class="field">
         <span>子供</span>
         <select id="childSelect" disabled>
@@ -43,7 +48,91 @@
       </fieldset>
     </section>
 
-    <section class="summary-grid" aria-label="最新データ">
+    <section class="input-panel input-view" aria-label="入力" hidden>
+      <div class="sub-tabs" role="tablist" aria-label="入力種類">
+        <button class="sub-tab is-active" type="button" data-input-view="measurement">測定データ追加</button>
+        <button class="sub-tab" type="button" data-input-view="child">子ども追加</button>
+      </div>
+
+      <form class="input-form" id="measurementForm" novalidate>
+        <label class="field">
+          <span>子ども</span>
+          <select id="measurementChildSelect" required disabled>
+            <option value="">読み込み中</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>測定日</span>
+          <input id="measurementDate" type="date" required>
+        </label>
+
+        <div class="field">
+          <span>身長 cm</span>
+          <div class="stepper" data-stepper="heightInput" data-step="0.1">
+            <button type="button" data-step-direction="-1" aria-label="身長を減らす">-</button>
+            <input id="heightInput" type="number" inputmode="decimal" min="0" step="0.1" placeholder="例 120.5">
+            <button type="button" data-step-direction="1" aria-label="身長を増やす">+</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span>体重 kg</span>
+          <div class="stepper" data-stepper="weightInput" data-step="0.1">
+            <button type="button" data-step-direction="-1" aria-label="体重を減らす">-</button>
+            <input id="weightInput" type="number" inputmode="decimal" min="0" step="0.1" placeholder="例 22.3">
+            <button type="button" data-step-direction="1" aria-label="体重を増やす">+</button>
+          </div>
+        </div>
+
+        <button class="primary-button" id="measurementSubmit" type="submit">保存</button>
+      </form>
+
+      <form class="input-form" id="childForm" novalidate hidden>
+        <label class="field">
+          <span>名前</span>
+          <input id="childNameInput" type="text" autocomplete="off" required>
+        </label>
+
+        <label class="field">
+          <span>性別</span>
+          <select id="childSexInput" required>
+            <option value="">選択してください</option>
+            <option value="male">male</option>
+            <option value="female">female</option>
+            <option value="1">1</option>
+            <option value="0">0</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>生年月日</span>
+          <input id="childBirthDateInput" type="date" required>
+        </label>
+
+        <div class="field">
+          <span>父身長 cm（任意）</span>
+          <div class="stepper" data-stepper="fatherHeightInput" data-step="0.1">
+            <button type="button" data-step-direction="-1" aria-label="父身長を減らす">-</button>
+            <input id="fatherHeightInput" type="number" inputmode="decimal" min="0" step="0.1" placeholder="例 172.0">
+            <button type="button" data-step-direction="1" aria-label="父身長を増やす">+</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span>母身長 cm（任意）</span>
+          <div class="stepper" data-stepper="motherHeightInput" data-step="0.1">
+            <button type="button" data-step-direction="-1" aria-label="母身長を減らす">-</button>
+            <input id="motherHeightInput" type="number" inputmode="decimal" min="0" step="0.1" placeholder="例 158.0">
+            <button type="button" data-step-direction="1" aria-label="母身長を増やす">+</button>
+          </div>
+        </div>
+
+        <button class="primary-button" id="childSubmit" type="submit">保存</button>
+      </form>
+    </section>
+
+    <section class="summary-grid chart-view" aria-label="最新データ">
       <div class="summary-card">
         <span>最新測定日</span>
         <strong id="latestDate">-</strong>
@@ -62,7 +151,7 @@
       </div>
     </section>
 
-    <section class="chart-panel" aria-label="成長曲線グラフ">
+    <section class="chart-panel chart-view" aria-label="成長曲線グラフ">
       <div class="chart-header">
         <h2 id="chartTitle">身長</h2>
         <p id="curveNote">SDS曲線を読み込み中</p>
