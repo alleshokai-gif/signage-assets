@@ -21,47 +21,29 @@ let growthDataTimeoutId = null;
 
 const COMPARE_METRICS = {
   height: {
+    key: "height",
     label: "身長",
     unit: "cm",
+    decimals: 1,
     getValue: (row) => row.height
   },
   weight: {
+    key: "weight",
     label: "体重",
     unit: "kg",
+    decimals: 1,
     getValue: (row) => row.weight
+  },
+  bmi: {
+    key: "bmi",
+    label: "BMI",
+    unit: "",
+    decimals: 1,
+    getValue: (row) => row.bmi
   }
 };
 
 const COMPARE_COLORS = ["#2563eb", "#f97316", "#16a34a", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"];
-
-const COMPARE_SDS_BAND_COLORS = {
-  male: "rgba(37, 99, 235, 0.08)",
-  female: "rgba(219, 39, 119, 0.08)",
-  unknown: "rgba(148, 163, 184, 0.07)"
-};
-
-const compareSdsBackgroundPlugin = {
-  id: "compareSdsBackground",
-  beforeDatasetsDraw(chart, args, options) {
-    const bands = Array.isArray(options?.bands) ? options.bands : [];
-    if (!bands.length || !chart.chartArea || !chart.scales.x || !chart.scales.y) {
-      return;
-    }
-
-    const { ctx, chartArea } = chart;
-    const xScale = chart.scales.x;
-    const yScale = chart.scales.y;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
-    ctx.clip();
-    bands.forEach((band) => {
-      drawSdsBand(ctx, chartArea, xScale, yScale, band);
-    });
-    ctx.restore();
-  }
-};
 
 window.handleGrowthData = function(data) {
   if (growthDataTimeoutId) {
@@ -92,6 +74,7 @@ function bindElements() {
   els.compareModeInputs = Array.from(document.querySelectorAll('input[name="compareMode"]'));
   els.compareChildren = document.getElementById("compareChildren");
   els.compareWarning = document.getElementById("compareWarning");
+  els.compareSummary = document.getElementById("compareSummary");
   els.measurementForm = document.getElementById("measurementForm");
   els.childForm = document.getElementById("childForm");
   els.measurementDate = document.getElementById("measurementDate");
@@ -303,17 +286,19 @@ function normalizeChild(child, index, fallbackCurves, sexCurves) {
 
 function normalizeMeasurement(row, birthDate) {
   const date = row.date || row.recordDate || row.record_date || row.measuredAt || row.measured_at || row.measurementDate || "";
-  const ageMonths = numberOrNull(row.ageMonths ?? row.age_months ?? row.months ?? calculateAgeMonths(birthDate, date));
+  const ageYears = numberOrNull(row.ageYears ?? row.age_years ?? row.years);
+  const ageMonths = numberOrNull(row.ageMonths ?? row.age_months ?? row.months ?? (ageYears === null ? null : ageYears * 12) ?? calculateAgeMonths(birthDate, date));
   const height = numberOrNull(row.height ?? row.heightCm ?? row.height_cm);
   const weight = numberOrNull(row.weight ?? row.weightKg ?? row.weight_kg);
+  const bmi = numberOrNull(row.bmi ?? row.BMI) ?? calculateBmi(height, weight);
   const heightSds = numberOrNull(row.heightSds ?? row.height_sds ?? row.sdsHeight);
   const weightSds = numberOrNull(row.weightSds ?? row.weight_sds ?? row.sdsWeight);
 
-  if (ageMonths === null || (height === null && weight === null)) {
+  if (ageMonths === null || (height === null && weight === null && bmi === null)) {
     return null;
   }
 
-  return { date, ageMonths, height, weight, heightSds, weightSds };
+  return { date, ageMonths, height, weight, bmi, heightSds, weightSds };
 }
 
 function normalizeCurves(rawCurves, rows) {
@@ -500,7 +485,7 @@ function getInitialCompareChildIds(children, previousIds) {
 }
 
 function hasAnyMeasurementValue(child) {
-  return child.measurements.some((row) => row.height !== null || row.weight !== null);
+  return child.measurements.some((row) => row.height !== null || row.weight !== null || row.bmi !== null);
 }
 
 function render() {
@@ -645,14 +630,14 @@ function renderCompareChart() {
 
   const metric = COMPARE_METRICS[state.compareMode] || COMPARE_METRICS.height;
   const children = getSelectedCompareChildren();
-  const sdsState = getCompareSdsState(children, state.compareMode);
   const measurementDatasets = children.map((child, index) => buildCompareMeasurementDataset(child, metric, index)).filter(Boolean);
   const datasets = measurementDatasets;
   const selectedCount = state.compareSelectedChildIds.length;
 
   els.compareWarning.hidden = selectedCount <= 3;
   els.compareChartTitle.textContent = `${metric.label}比較`;
-  els.compareNote.textContent = getCompareNote(measurementDatasets.length, sdsState);
+  els.compareNote.textContent = getCompareNote(measurementDatasets.length);
+  renderCompareSummary(children);
 
   if (state.chart) {
     state.chart.destroy();
@@ -661,7 +646,6 @@ function renderCompareChart() {
   state.chart = new Chart(els.compareChartCanvas, {
     type: "line",
     data: { datasets },
-    plugins: [compareSdsBackgroundPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -669,10 +653,15 @@ function renderCompareChart() {
       parsing: false,
       plugins: {
         legend: {
-          position: "bottom"
-        },
-        compareSdsBackground: {
-          bands: sdsState.bands || []
+          position: "bottom",
+          align: "start",
+          labels: {
+            boxWidth: 14,
+            boxHeight: 3,
+            padding: 14,
+            usePointStyle: true,
+            pointStyle: "line"
+          }
         },
         tooltip: {
           filter(item) {
@@ -685,13 +674,12 @@ function renderCompareChart() {
             },
             label(item) {
               const point = item.raw;
-              const value = Number.isFinite(point.y) ? `${point.y.toFixed(1)} ${metric.unit}` : "-";
-              return [`測定日: ${point.date || "-"}`, `${metric.label}: ${value}`];
+              return [`測定日: ${point.date || "-"}`, `${metric.label}: ${formatMetricValue(point.y, metric)}`];
             }
           }
         }
       },
-      scales: buildCompareScales(datasets, metric, sdsState.bands || [])
+      scales: buildCompareScales(datasets, metric)
     }
   });
 }
@@ -702,36 +690,40 @@ function getSelectedCompareChildren() {
     .filter(Boolean);
 }
 
-function getCompareNote(measurementCount, sdsState) {
+function getCompareNote(measurementCount) {
   if (!measurementCount) {
     return "比較する子供を選択してください";
   }
-  if (sdsState.reason) {
-    return sdsState.reason;
-  }
-  return `${measurementCount}人の実測値を表示 / SDS帯は背景に表示`;
+  return `${measurementCount}人の実測値のみを表示`;
 }
 
-function getCompareSdsState(children, metricKey) {
+function renderCompareSummary(children) {
+  if (!els.compareSummary) {
+    return;
+  }
+
   if (!children.length) {
-    return { visible: false, bands: [], reason: "" };
+    els.compareSummary.innerHTML = "";
+    return;
   }
 
-  const sexKeys = children.map((child) => normalizeSexKey(child.sex));
-  const bands = buildCompareSdsBands(children, metricKey);
-  if (!bands.length) {
-    return { visible: false, bands: [], reason: "SDS帯データなし" };
-  }
-
-  if (sexKeys.some((sex) => !sex)) {
-    return { visible: true, bands, reason: "性別が判定できない子供を含むため、SDS帯は参考表示" };
-  }
-
-  if (new Set(sexKeys).size > 1) {
-    return { visible: true, bands, reason: "男女混在のため、SDS帯は参考表示" };
-  }
-
-  return { visible: true, bands, reason: "" };
+  els.compareSummary.innerHTML = children.map((child, index) => {
+    const latest = child.measurements[child.measurements.length - 1] || {};
+    const color = COMPARE_COLORS[index % COMPARE_COLORS.length];
+    return `
+      <article class="compare-summary-card" style="--compare-color: ${color}">
+        <h3>${escapeHtml(child.name)}</h3>
+        <dl>
+          <div><dt>最新測定日</dt><dd>${escapeHtml(latest.date || "-")}</dd></div>
+          <div><dt>最新身長</dt><dd>${formatNullableNumber(latest.height, "cm")}</dd></div>
+          <div><dt>最新体重</dt><dd>${formatNullableNumber(latest.weight, "kg")}</dd></div>
+          <div><dt>最新BMI</dt><dd>${formatNullableNumber(latest.bmi, "")}</dd></div>
+          <div><dt>身長SDS</dt><dd>${formatSdsValue(latest.heightSds)}</dd></div>
+          <div><dt>体重SDS</dt><dd>${formatSdsValue(latest.weightSds)}</dd></div>
+        </dl>
+      </article>
+    `;
+  }).join("");
 }
 
 function getRawSexValue(source) {
@@ -765,151 +757,11 @@ function getCurvesForSex(sexKey, sexCurves = state.sexCurves) {
   return sexCurves[sexKey];
 }
 
-function getChildCurvesForCompare(child, metricKey) {
-  const sexCurves = getCurvesForSex(normalizeSexKey(child.sex));
-  const curves = sexCurves || child.curves || state.curves;
-  return curves && Array.isArray(curves[metricKey]) ? curves[metricKey] : [];
-}
-
-function buildCompareSdsBands(children, metricKey) {
-  const bands = [];
-  const seenSexes = new Set();
-
-  children.forEach((child) => {
-    const sexKey = normalizeSexKey(child.sex) || "unknown";
-    if (seenSexes.has(sexKey)) {
-      return;
-    }
-
-    const curves = getChildCurvesForCompare(child, metricKey);
-    const lower = findSdsCurve(curves, -1);
-    const upper = findSdsCurve(curves, 1);
-    if (!lower || !upper) {
-      return;
-    }
-
-    seenSexes.add(sexKey);
-    bands.push({
-      sexKey,
-      lower: lower.points,
-      upper: upper.points,
-      color: COMPARE_SDS_BAND_COLORS[sexKey] || COMPARE_SDS_BAND_COLORS.unknown
-    });
-  });
-
-  return bands;
-}
-
-function findSdsCurve(curves, sds) {
-  return curves.find((curve) => curve.sds === sds);
-}
-
-function drawSdsBand(ctx, chartArea, xScale, yScale, band) {
-  const lower = buildSdsBoundaryPoints(band.lower, xScale, yScale);
-  const upper = buildSdsBoundaryPoints(band.upper, xScale, yScale);
-  if (lower.length < 2 || upper.length < 2) {
-    return;
-  }
-
-  ctx.beginPath();
-  upper.forEach((point, index) => {
-    const x = clamp(point.x, chartArea.left, chartArea.right);
-    const y = clamp(point.y, chartArea.top, chartArea.bottom);
-    if (index === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-  });
-
-  [...lower].reverse().forEach((point) => {
-    ctx.lineTo(
-      clamp(point.x, chartArea.left, chartArea.right),
-      clamp(point.y, chartArea.top, chartArea.bottom)
-    );
-  });
-
-  ctx.closePath();
-  ctx.fillStyle = band.color;
-  ctx.fill();
-}
-
-function buildSdsBoundaryPoints(points, xScale, yScale) {
-  const scaleMinX = numberOrNull(xScale.min);
-  const scaleMaxX = numberOrNull(xScale.max);
-  if (scaleMinX === null || scaleMaxX === null || scaleMinX === scaleMaxX) {
-    return [];
-  }
-
-  const sorted = (Array.isArray(points) ? points : [])
-    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-    .sort((a, b) => a.x - b.x);
-
-  if (sorted.length < 2) {
-    return [];
-  }
-
-  const minX = Math.max(scaleMinX, sorted[0].x);
-  const maxX = Math.min(scaleMaxX, sorted[sorted.length - 1].x);
-  if (minX >= maxX) {
-    return [];
-  }
-
-  const xs = [
-    minX,
-    ...sorted.map((point) => point.x).filter((x) => x > minX && x < maxX),
-    maxX
-  ];
-
-  return xs.map((x) => {
-    const y = interpolateSdsY(sorted, x);
-    return y === null ? null : {
-      x: xScale.getPixelForValue(x),
-      y: yScale.getPixelForValue(y)
-    };
-  }).filter(Boolean);
-}
-
-function interpolateSdsY(points, x) {
-  if (!points.length) {
-    return null;
-  }
-  if (x <= points[0].x) {
-    return points[0].y;
-  }
-
-  const last = points[points.length - 1];
-  if (x >= last.x) {
-    return last.y;
-  }
-
-  for (let index = 1; index < points.length; index += 1) {
-    const left = points[index - 1];
-    const right = points[index];
-    if (x > right.x) {
-      continue;
-    }
-    if (right.x === left.x) {
-      return right.y;
-    }
-    const ratio = (x - left.x) / (right.x - left.x);
-    return left.y + (right.y - left.y) * ratio;
-  }
-
-  return last.y;
-}
-
 function buildCompareMeasurementDataset(child, metric, index) {
   const color = COMPARE_COLORS[index % COMPARE_COLORS.length];
-  const data = child.measurements.map((row) => {
-    const value = metric.getValue(row);
-    return value === null ? null : {
-      x: row.ageMonths,
-      y: value,
-      date: row.date,
-      childName: child.name
-    };
-  }).filter(Boolean);
+  const data = metric.key === "bmi"
+    ? buildBmiComparePoints(child)
+    : buildStandardComparePoints(child, metric);
 
   if (!data.length) {
     return null;
@@ -919,23 +771,99 @@ function buildCompareMeasurementDataset(child, metric, index) {
     label: child.name,
     data,
     borderColor: color,
-    backgroundColor: color,
-    borderWidth: 3,
-    pointRadius: 4,
-    pointHoverRadius: 6,
-    tension: 0.2,
+    backgroundColor: "#ffffff",
+    borderWidth: 3.5,
+    pointRadius: 4.5,
+    pointHoverRadius: 7,
+    pointBorderColor: color,
+    pointBackgroundColor: "#ffffff",
+    pointBorderWidth: 2,
+    tension: 0.18,
     yAxisID: "y",
     isCompareMeasurement: true,
     order: 1
   };
 }
 
-function buildCompareScales(datasets, metric, sdsBands = []) {
-  const axisDatasets = [
-    ...datasets,
-    ...buildSdsBandAxisDatasets(sdsBands)
-  ];
+function buildStandardComparePoints(child, metric) {
+  return child.measurements.map((row) => {
+    const value = metric.getValue(row);
+    return value === null ? null : buildComparePoint(row, child.name, value);
+  }).filter(Boolean);
+}
 
+function buildBmiComparePoints(child) {
+  logBmiDebugRows(child);
+
+  const points = child.measurements.map((row) => {
+    const value = getBmiCompareValue(row);
+    return value === null ? null : buildComparePoint(row, child.name, value);
+  }).filter(Boolean);
+
+  console.log("BMI points", child.name, points.length);
+  return points;
+}
+
+function logBmiDebugRows(child) {
+  if (!["はのん", "ふうが", "りお"].includes(child.name)) {
+    return;
+  }
+
+  const firstRow = child.measurements[0] || null;
+  const latestRow = child.measurements[child.measurements.length - 1] || null;
+  console.log("BMI debug child", child.name, "rows", child.measurements.length);
+  logBmiDebugRow(child.name, "first", firstRow);
+  logBmiDebugRow(child.name, "latest", latestRow);
+}
+
+function logBmiDebugRow(childName, label, row) {
+  console.log("BMI debug row", childName, label, row);
+  console.log("BMI debug keys", childName, label, row ? Object.keys(row) : []);
+  console.log("BMI debug values", childName, label, {
+    height: row?.height,
+    weight: row?.weight,
+    height_cm: row?.height_cm,
+    weight_kg: row?.weight_kg,
+    bmi: row?.bmi,
+    parsedHeight: numberOrNull(row?.height_cm ?? row?.heightCm ?? row?.height),
+    parsedWeight: numberOrNull(row?.weight_kg ?? row?.weightKg ?? row?.weight),
+    parsedBmi: numberOrNull(row?.bmi)
+  });
+}
+
+function getBmiCompareValue(row) {
+  const bmi = numberOrNull(row.bmi);
+  if (bmi !== null) {
+    return bmi;
+  }
+
+  const heightCm = numberOrNull(row.height_cm ?? row.heightCm ?? row.height);
+  const weightKg = numberOrNull(row.weight_kg ?? row.weightKg ?? row.weight);
+  return calculateBmi(heightCm, weightKg);
+}
+
+function buildComparePoint(row, childName, value) {
+  if (!Number.isFinite(row.ageMonths) || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return {
+    x: row.ageMonths,
+    y: value,
+    date: row.date,
+    childName
+  };
+}
+
+function formatMetricValue(value, metric) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  const formatted = value.toFixed(metric.decimals ?? 1);
+  return metric.unit ? `${formatted} ${metric.unit}` : formatted;
+}
+
+function buildCompareScales(datasets, metric) {
   return {
     x: {
       type: "linear",
@@ -947,18 +875,11 @@ function buildCompareScales(datasets, metric, sdsBands = []) {
       }
     },
     y: {
-      title: { display: true, text: `${metric.label} ${metric.unit}` },
+      title: { display: true, text: metric.unit ? `${metric.label} ${metric.unit}` : metric.label },
       beginAtZero: false,
-      ...buildAxisBounds(axisDatasets, "y")
+      ...buildAxisBounds(datasets, "y")
     }
   };
-}
-
-function buildSdsBandAxisDatasets(sdsBands) {
-  return (Array.isArray(sdsBands) ? sdsBands : []).flatMap((band) => [
-    { data: band.lower || [], yAxisID: "y" },
-    { data: band.upper || [], yAxisID: "y" }
-  ]);
 }
 
 function renderView() {
@@ -1239,6 +1160,15 @@ function calculateAgeMonths(birthDate, date) {
   return Math.max(0, Math.round((years * 12 + months + dayOffset) * 10) / 10);
 }
 
+function calculateBmi(heightCm, weightKg) {
+  if (!Number.isFinite(heightCm) || !Number.isFinite(weightKg) || heightCm <= 0 || weightKg <= 0) {
+    return null;
+  }
+
+  const heightM = heightCm / 100;
+  return weightKg / (heightM * heightM);
+}
+
 function parseLocalDate(value) {
   if (!value) {
     return null;
@@ -1267,8 +1197,17 @@ function numberOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+function formatNullableNumber(value, unit, decimals = 1) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+
+  const formatted = value.toFixed(decimals);
+  return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function formatSdsValue(value) {
+  return Number.isFinite(value) ? value.toFixed(2) : "-";
 }
 
 function formatAge(months) {

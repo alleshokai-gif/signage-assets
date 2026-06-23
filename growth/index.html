@@ -6,7 +6,7 @@
   <title>成長曲線</title>
   <link rel="stylesheet" href="assets/css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js" defer></script>
-  <script src="assets/js/app.js?v=20260623-6" defer></script>
+  <script src="assets/js/app.js?v=20260623-9" defer></script>
 </head>
 <body>
   <main class="app-shell">
@@ -171,6 +171,10 @@
           <input type="radio" name="compareMode" value="weight">
           <span>体重</span>
         </label>
+        <label>
+          <input type="radio" name="compareMode" value="bmi">
+          <span>BMI</span>
+        </label>
       </fieldset>
 
       <fieldset class="compare-picker" aria-label="比較する子供">
@@ -182,6 +186,8 @@
     <section class="compare-warning compare-view" id="compareWarning" hidden>
       比較対象が多いとスマホでは線が重なって見づらくなる場合があります。
     </section>
+
+    <section class="compare-summary-grid compare-view" id="compareSummary" aria-label="比較サマリー" hidden></section>
 
     <section class="chart-panel compare-view" aria-label="比較グラフ" hidden>
       <div class="chart-header">
