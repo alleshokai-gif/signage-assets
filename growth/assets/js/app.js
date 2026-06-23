@@ -3,6 +3,7 @@ const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwwQ3VgW4YP2oKBWn0y
 const state = {
   children: [],
   curves: { height: [], weight: [] },
+  sexCurves: { male: { height: [], weight: [] }, female: { height: [], weight: [] } },
   selectedChildId: "",
   mode: "height",
   compareMode: "height",
@@ -225,6 +226,7 @@ function initialize(payload) {
 
     state.children = normalized.children;
     state.curves = normalized.curves;
+    state.sexCurves = normalized.sexCurves;
     state.selectedChildId = state.children.some((child) => child.id === previousSelectedChildId)
       ? previousSelectedChildId
       : state.children[0].id;
@@ -254,9 +256,10 @@ function normalizePayload(payload) {
   const source = payload && payload.data ? payload.data : payload;
   const rawChildren = Array.isArray(source.children) ? source.children : buildChildrenFromRecords(source.records || source.measurements || []);
   const curves = normalizeCurves(source.sds || source.sdsCurves || source.curves || {}, source.rows || []);
-  const children = rawChildren.map((child, index) => normalizeChild(child, index, curves));
+  const sexCurves = normalizeSexCurves(source.sdsBySex || source.sexCurves || {}, source.rows || []);
+  const children = rawChildren.map((child, index) => normalizeChild(child, index, curves, sexCurves));
 
-  return { children, curves };
+  return { children, curves, sexCurves };
 }
 
 function buildChildrenFromRecords(records) {
@@ -279,17 +282,18 @@ function buildChildrenFromRecords(records) {
   return Array.from(map.values());
 }
 
-function normalizeChild(child, index, fallbackCurves) {
+function normalizeChild(child, index, fallbackCurves, sexCurves) {
   const birthDate = child.birthDate || child.birth_date || "";
   const measurements = Array.isArray(child.measurements) ? child.measurements : Array.isArray(child.rows) ? child.rows : [];
   const curves = normalizeCurves(child.sds || child.sdsCurves || child.curves || {}, measurements);
+  const sexKey = normalizeSexKey(getRawSexValue(child));
 
   return {
     id: String(child.id || child.childId || child.name || `child-${index + 1}`),
     name: child.name || child.childName || `子供${index + 1}`,
     sex: getRawSexValue(child),
     birthDate,
-    curves: hasCurveData(curves) ? curves : fallbackCurves,
+    curves: hasCurveData(curves) ? curves : getCurvesForSex(sexKey, sexCurves) || fallbackCurves,
     measurements: measurements.map((row) => normalizeMeasurement(row, birthDate)).filter(Boolean).sort((a, b) => a.ageMonths - b.ageMonths)
   };
 }
@@ -324,6 +328,84 @@ function normalizeCurves(rawCurves, rows) {
 
 function hasCurveData(curves) {
   return Boolean(curves && ((curves.height && curves.height.length) || (curves.weight && curves.weight.length)));
+}
+
+function createEmptyCurves() {
+  return { height: [], weight: [] };
+}
+
+function normalizeSexCurves(rawSexCurves, rows) {
+  const rowCurves = normalizeSexCurvesFromRows(rows);
+  const structuredCurves = {};
+
+  Object.entries(rawSexCurves || {}).forEach(([sex, curves]) => {
+    const sexKey = normalizeSexKey(sex);
+    if (sexKey) {
+      structuredCurves[sexKey] = normalizeCurves(curves, []);
+    }
+  });
+
+  return {
+    male: hasCurveData(structuredCurves.male) ? structuredCurves.male : rowCurves.male,
+    female: hasCurveData(structuredCurves.female) ? structuredCurves.female : rowCurves.female
+  };
+}
+
+function normalizeSexCurvesFromRows(rows) {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  const result = {
+    male: createEmptyCurves(),
+    female: createEmptyCurves()
+  };
+  const sdsSpecs = [
+    { key: "-2SD", altKeys: ["m2sd", "minus2sd", "sd_minus_2"], sds: -2 },
+    { key: "-1SD", altKeys: ["m1sd", "minus1sd", "sd_minus_1"], sds: -1 },
+    { key: "mean", altKeys: ["0SD", "0sd", "average"], sds: 0 },
+    { key: "1SD", altKeys: ["p1sd", "plus1sd", "sd_plus_1"], sds: 1 },
+    { key: "2SD", altKeys: ["p2sd", "plus2sd", "sd_plus_2"], sds: 2 }
+  ];
+
+  ["male", "female"].forEach((sexKey) => {
+    ["height", "weight"].forEach((metricKey) => {
+      result[sexKey][metricKey] = sdsSpecs.map((spec) => ({
+        label: formatSdsLabel(spec.sds),
+        sds: spec.sds,
+        points: sourceRows.map((row) => {
+          const rowSexKey = normalizeSexKey(row.gender ?? row.sex ?? row.genderId ?? row.gender_id);
+          const rowMetricKey = normalizeSdsRowMetricKey(row);
+          if (rowSexKey !== sexKey || rowMetricKey !== metricKey) {
+            return null;
+          }
+
+          const ageMonths = numberOrNull(row.month ?? row.months ?? row.ageMonths ?? row.age_months ?? row.x);
+          const value = numberOrNull(getFirstPresentValue(row, [spec.key, ...spec.altKeys]));
+          return ageMonths === null || value === null ? null : { x: ageMonths, y: value };
+        }).filter(Boolean).sort((a, b) => a.x - b.x)
+      })).filter((curve) => curve.points.length);
+    });
+  });
+
+  return result;
+}
+
+function normalizeSdsRowMetricKey(row) {
+  const type = String(row.type ?? row.metric ?? row.kind ?? "").trim().toLowerCase();
+  if (["1", "1.0", "height", "heightcm", "stature", "身長"].includes(type)) {
+    return "height";
+  }
+  if (["2", "2.0", "weight", "weightkg", "体重"].includes(type)) {
+    return "weight";
+  }
+  return "";
+}
+
+function getFirstPresentValue(source, keys) {
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null && source[key] !== "") {
+      return source[key];
+    }
+  }
+  return null;
 }
 
 function normalizeCurvesFromRows(rows) {
@@ -667,14 +749,22 @@ function normalizeSexKey(value) {
   if (["1", "1.0", "male", "m", "boy", "男", "男子", "男児", "男性", "男の子"].includes(text)) {
     return "male";
   }
-  if (["0", "0.0", "female", "f", "girl", "女", "女子", "女児", "女性", "女の子"].includes(text)) {
+  if (["0", "0.0", "2", "2.0", "female", "f", "girl", "女", "女子", "女児", "女性", "女の子"].includes(text)) {
     return "female";
   }
   return "";
 }
 
+function getCurvesForSex(sexKey, sexCurves = state.sexCurves) {
+  if (!sexKey || !sexCurves || !hasCurveData(sexCurves[sexKey])) {
+    return null;
+  }
+  return sexCurves[sexKey];
+}
+
 function getChildCurvesForCompare(child, metricKey) {
-  const curves = child.curves || state.curves;
+  const sexCurves = getCurvesForSex(normalizeSexKey(child.sex));
+  const curves = sexCurves || child.curves || state.curves;
   return curves && Array.isArray(curves[metricKey]) ? curves[metricKey] : [];
 }
 
@@ -742,9 +832,9 @@ function drawSdsBand(ctx, chartArea, xScale, yScale, band) {
 }
 
 function buildSdsBoundaryPoints(points, xScale, yScale) {
-  const minX = numberOrNull(xScale.min);
-  const maxX = numberOrNull(xScale.max);
-  if (minX === null || maxX === null || minX === maxX) {
+  const scaleMinX = numberOrNull(xScale.min);
+  const scaleMaxX = numberOrNull(xScale.max);
+  if (scaleMinX === null || scaleMaxX === null || scaleMinX === scaleMaxX) {
     return [];
   }
 
@@ -753,6 +843,12 @@ function buildSdsBoundaryPoints(points, xScale, yScale) {
     .sort((a, b) => a.x - b.x);
 
   if (sorted.length < 2) {
+    return [];
+  }
+
+  const minX = Math.max(scaleMinX, sorted[0].x);
+  const maxX = Math.min(scaleMaxX, sorted[sorted.length - 1].x);
+  if (minX >= maxX) {
     return [];
   }
 
