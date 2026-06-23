@@ -241,7 +241,7 @@ function buildChildrenFromRecords(records) {
     const child = map.get(childId) || {
       id: childId,
       name: record.childName || record.name || `子供${index + 1}`,
-      sex: record.sex || record.gender || "",
+      sex: getRawSexValue(record),
       birthDate: record.birthDate || record.birth_date || "",
       measurements: []
     };
@@ -261,7 +261,7 @@ function normalizeChild(child, index, fallbackCurves) {
   return {
     id: String(child.id || child.childId || child.name || `child-${index + 1}`),
     name: child.name || child.childName || `子供${index + 1}`,
-    sex: child.sex || child.gender || "",
+    sex: getRawSexValue(child),
     birthDate,
     curves: hasCurveData(curves) ? curves : fallbackCurves,
     measurements: measurements.map((row) => normalizeMeasurement(row, birthDate)).filter(Boolean).sort((a, b) => a.ageMonths - b.ageMonths)
@@ -609,26 +609,41 @@ function getCompareSdsState(children, metricKey) {
   }
 
   const sexKeys = children.map((child) => normalizeSexKey(child.sex));
+  const curves = getChildCurvesForCompare(children[0], metricKey);
+  if (!curves.length) {
+    return { visible: false, curves: null, reason: "SDS帯データなし" };
+  }
+
   if (sexKeys.some((sex) => !sex)) {
-    return { visible: false, curves: null, reason: "性別が判定できないためSDS帯は非表示" };
+    return { visible: true, curves, reason: "性別が判定できない子供を含むため、SDS帯は参考表示" };
   }
 
   if (new Set(sexKeys).size > 1) {
-    return { visible: false, curves: null, reason: "男女混在のためSDS帯は非表示" };
+    return { visible: true, curves, reason: "男女混在のため、SDS帯は参考表示" };
   }
 
-  const curves = getChildCurvesForCompare(children[0], metricKey);
-  return curves.length
-    ? { visible: true, curves, reason: "" }
-    : { visible: false, curves: null, reason: "SDS帯データなし" };
+  return { visible: true, curves, reason: "" };
+}
+
+function getRawSexValue(source) {
+  return source.sex
+    ?? source.gender
+    ?? source.sexId
+    ?? source.sex_id
+    ?? source.genderId
+    ?? source.gender_id
+    ?? source.sexCode
+    ?? source.sex_code
+    ?? source["性別"]
+    ?? "";
 }
 
 function normalizeSexKey(value) {
   const text = String(value ?? "").trim().toLowerCase();
-  if (["1", "male", "m", "boy", "男", "男子"].includes(text)) {
+  if (["1", "1.0", "male", "m", "boy", "男", "男子", "男児", "男性", "男の子"].includes(text)) {
     return "male";
   }
-  if (["0", "female", "f", "girl", "女", "女子"].includes(text)) {
+  if (["0", "0.0", "female", "f", "girl", "女", "女子", "女児", "女性", "女の子"].includes(text)) {
     return "female";
   }
   return "";
@@ -652,7 +667,7 @@ function buildCompareSdsDatasets(curves) {
     label: `SDS ${curve.label}`,
     data: curve.points,
     borderColor: curve.sds === 0 ? "rgba(100, 116, 139, 0.45)" : "rgba(148, 163, 184, 0)",
-    backgroundColor: index === 0 ? "rgba(148, 163, 184, 0)" : "rgba(148, 163, 184, 0.08)",
+    backgroundColor: getCompareSdsBandColor(curve.sds, index),
     borderWidth: curve.sds === 0 ? 1 : 0,
     fill: index === 0 ? false : "-1",
     pointRadius: 0,
@@ -666,6 +681,15 @@ function buildCompareSdsDatasets(curves) {
 
 function findSdsCurve(curves, sds) {
   return curves.find((curve) => curve.sds === sds);
+}
+
+function getCompareSdsBandColor(sds, index) {
+  if (index === 0) {
+    return "rgba(148, 163, 184, 0)";
+  }
+  return sds === 0 || sds === 1
+    ? "rgba(37, 99, 235, 0.08)"
+    : "rgba(148, 163, 184, 0.05)";
 }
 
 function buildCompareMeasurementDataset(child, metric, index) {
