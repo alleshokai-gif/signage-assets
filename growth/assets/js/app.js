@@ -18,6 +18,7 @@ const state = {
 const els = {};
 const JSONP_TIMEOUT_MS = 15000;
 let growthDataTimeoutId = null;
+let growthDataRequest = null;
 
 const COMPARE_METRICS = {
   height: {
@@ -52,7 +53,18 @@ window.handleGrowthData = function(data) {
   }
 
   showMessage("", "");
-  initialize(data);
+  const request = growthDataRequest;
+  growthDataRequest = null;
+  const initialized = initialize(data);
+
+  if (request) {
+    cleanupGrowthDataScript(request.script);
+    if (initialized) {
+      request.resolve(data);
+    } else {
+      request.reject(new Error("GAS APIから取得したデータを画面に反映できませんでした。"));
+    }
+  }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -104,7 +116,14 @@ function bindElements() {
 }
 
 function bindEvents() {
-  els.measurementDate.max = formatDateInputValue(new Date());
+  const today = formatDateInputValue(new Date());
+  els.measurementDate.max = today;
+  els.measurementDate.value = els.measurementDate.value || today;
+  els.childBirthDateInput.max = today;
+  els.heightInput.placeholder = "149.7";
+  els.weightInput.placeholder = "52.3";
+  els.fatherHeightInput.placeholder = "172.0";
+  els.motherHeightInput.placeholder = "158.0";
 
   els.mainTabs.forEach((button) => {
     button.addEventListener("click", () => {
@@ -201,6 +220,41 @@ function loadGrowthData() {
   document.head.appendChild(script);
 }
 
+function reloadGrowthData(options = {}) {
+  if (growthDataRequest) {
+    growthDataRequest.reject(new Error("JSONP request was replaced"));
+    growthDataRequest = null;
+  }
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      growthDataRequest = null;
+      reject(new Error("JSONP callback timed out"));
+    }, JSONP_TIMEOUT_MS + 1000);
+
+    growthDataRequest = {
+      script: null,
+      resolve: (data) => {
+        clearTimeout(timeoutId);
+        resolve(data);
+      },
+      reject: (error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    };
+
+    loadGrowthData();
+    setStatus(options.statusText || "最新データ取得中...");
+  });
+}
+
+function cleanupGrowthDataScript(script) {
+  if (script && script.parentNode) {
+    script.parentNode.removeChild(script);
+  }
+}
+
 function initialize(payload) {
   try {
     const previousSelectedChildId = state.pendingSelectedChildId || state.selectedChildId;
@@ -223,12 +277,19 @@ function initialize(payload) {
     render();
     renderView();
     setStatus("読み込み完了");
+    return true;
   } catch (error) {
     handleGrowthDataError(error);
+    return false;
   }
 }
 
 function handleGrowthDataError(error) {
+  if (growthDataRequest) {
+    const request = growthDataRequest;
+    growthDataRequest = null;
+    request.reject(error);
+  }
   setStatus("取得失敗", true);
   showMessage(
     "データ取得失敗",
@@ -972,9 +1033,9 @@ async function handleChildSubmit(event) {
 }
 
 async function submitGrowthData(payload, onSuccess) {
-  setSubmitting(true);
+  setSubmitting(true, "保存中...");
   showMessage("", "");
-  setStatus("保存中");
+  setStatus("保存中...");
 
   try {
     const response = await fetch(GAS_API_URL, {
@@ -982,7 +1043,7 @@ async function submitGrowthData(payload, onSuccess) {
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload)
     });
-    const result = await response.json();
+    const result = await parseJsonResponse(response);
 
     if (!response.ok || !result.ok) {
       throw new Error(result.error || `HTTP ${response.status}`);
@@ -991,13 +1052,31 @@ async function submitGrowthData(payload, onSuccess) {
     if (onSuccess) {
       onSuccess(result);
     }
-    setStatus("保存完了");
-    loadGrowthData();
+    try {
+      await reloadGrowthData({ statusText: "最新データ取得中...", clearMessage: false });
+      setStatus("保存完了");
+    } catch (reloadError) {
+      setStatus("再取得失敗", true);
+      showMessage("再取得失敗", `保存は完了しましたが、最新データを再取得できませんでした。詳細: ${reloadError.message}`);
+    }
   } catch (error) {
     setStatus("保存失敗", true);
-    showMessage("保存失敗", `GASへの送信に失敗しました。詳細: ${error.message}`);
+    showMessage("保存失敗", `GASから返ったエラー: ${error.message}`);
   } finally {
     setSubmitting(false);
+  }
+}
+
+async function parseJsonResponse(response) {
+  const text = await response.text();
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`GASの応答をJSONとして読めませんでした。HTTP ${response.status}`);
   }
 }
 
@@ -1033,6 +1112,9 @@ function validateChildPayload(payload) {
   if (!payload.birthDate) {
     return "生年月日を入力してください。";
   }
+  if (isFutureDate(payload.birthDate)) {
+    return "生年月日は未来日にできません。";
+  }
   if (payload.heightFather !== "" && numberOrNull(payload.heightFather) === null) {
     return "父身長は数値で入力してください。";
   }
@@ -1042,10 +1124,12 @@ function validateChildPayload(payload) {
   return "";
 }
 
-function setSubmitting(isSubmitting) {
+function setSubmitting(isSubmitting, label = "保存中...") {
   state.isSubmitting = isSubmitting;
   els.measurementSubmit.disabled = isSubmitting;
   els.childSubmit.disabled = isSubmitting;
+  updateSubmitButtonText(els.measurementSubmit, isSubmitting, label);
+  updateSubmitButtonText(els.childSubmit, isSubmitting, label);
   els.measurementForm.querySelectorAll("input, select, button").forEach((element) => {
     element.disabled = isSubmitting;
   });
@@ -1055,6 +1139,17 @@ function setSubmitting(isSubmitting) {
   if (!isSubmitting) {
     els.measurementChildSelect.disabled = !state.children.length;
   }
+}
+
+function updateSubmitButtonText(button, isSubmitting, label) {
+  if (!button) {
+    return;
+  }
+
+  if (!button.dataset.idleText) {
+    button.dataset.idleText = button.textContent;
+  }
+  button.textContent = isSubmitting ? label : button.dataset.idleText;
 }
 
 function adjustNumberInput(input, delta) {

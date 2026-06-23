@@ -189,12 +189,19 @@ h1 {
 
 .stepper {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 48px;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.stepper input {
-  text-align: center;
+.stepper button {
+  display: none;
+}
+
+.stepper input,
+.field input[type="number"] {
+  min-height: 52px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-align: left;
 }
 
 .mode-switch {
@@ -438,6 +445,157 @@ h1 {
   color: #7a271a;
 }
 
+@media (min-width: 900px) and (max-width: 1280px) and (orientation: landscape) {
+  .app-shell {
+    width: min(1200px, 100%);
+    padding: 14px 18px;
+  }
+
+  .app-header {
+    margin-bottom: 10px;
+  }
+
+  .eyebrow {
+    margin-bottom: 2px;
+    font-size: 0.72rem;
+  }
+
+  h1 {
+    font-size: clamp(1.45rem, 2.4vw, 2rem);
+  }
+
+  .status-pill {
+    padding: 6px 10px;
+    font-size: 0.82rem;
+  }
+
+  .main-tabs,
+  .sub-tabs {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .main-tab,
+  .sub-tab,
+  .primary-button {
+    min-height: 40px;
+  }
+
+  .main-tab,
+  .sub-tab {
+    padding: 0 14px;
+  }
+
+  .control-panel {
+    grid-template-columns: minmax(190px, 260px) 1fr;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .field {
+    gap: 6px;
+    font-size: 0.82rem;
+  }
+
+  .field select,
+  .field input {
+    min-height: 40px;
+  }
+
+  .mode-switch legend,
+  .compare-picker legend {
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+  }
+
+  .mode-switch span,
+  .compare-child-option span {
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .summary-card {
+    padding: 10px 12px;
+  }
+
+  .summary-card span {
+    margin-bottom: 4px;
+    font-size: 0.76rem;
+  }
+
+  .summary-card strong {
+    font-size: 1.05rem;
+  }
+
+  .chart-panel {
+    padding: 12px;
+  }
+
+  .chart-header {
+    margin-bottom: 8px;
+  }
+
+  .chart-header h2 {
+    font-size: 1.08rem;
+  }
+
+  .chart-header p {
+    font-size: 0.8rem;
+  }
+
+  .chart-wrap {
+    height: clamp(360px, 61dvh, 470px);
+    min-height: 340px;
+  }
+
+  .input-panel {
+    padding: 12px;
+  }
+
+  .input-form {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .input-form .primary-button {
+    grid-column: auto;
+    align-self: end;
+  }
+
+  .stepper input,
+  .field input[type="number"] {
+    min-height: 46px;
+    font-size: 1.05rem;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 1024px) and (orientation: portrait) {
+  .app-shell {
+    padding: 18px;
+  }
+
+  .control-panel,
+  .input-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .chart-wrap {
+    height: clamp(420px, 52dvh, 560px);
+    min-height: 380px;
+  }
+}
+
 @media (max-width: 760px) {
   .app-shell {
     padding: 16px;
@@ -483,7 +641,7 @@ h1 {
   }
 
   .summary-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 
   .chart-header p {
