@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>アラート設定</title>
+  <link rel="stylesheet" href="alert.css">
+  <script src="alert.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div>
+        <p class="eyebrow">Signage Admin</p>
+        <h1>アラート設定</h1>
+      </div>
+      <div id="status" class="status">ready</div>
+    </header>
+
+    <section class="panel">
+      <form id="alertForm" class="form">
+        <label class="field">
+          <span>カテゴリ</span>
+          <select id="category" name="category">
+            <option value="outing">お出かけ</option>
+            <option value="kitchen">キッチンタイマー</option>
+            <option value="custom">自由</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>モード</span>
+          <select id="mode" name="mode"></select>
+        </label>
+
+        <label class="field">
+          <span>日付</span>
+          <input id="date" name="date" type="date">
+        </label>
+
+        <fieldset class="field mode-field">
+          <legend>方式</legend>
+          <label><input type="radio" name="timeMode" value="absolute" checked> 時刻指定</label>
+          <label><input type="radio" name="timeMode" value="relative"> 相対タイマー</label>
+        </fieldset>
+
+        <label class="field">
+          <span>出発時刻</span>
+          <input id="time" name="time" type="time" value="08:00">
+        </label>
+
+        <label class="field">
+          <span>タイマー分数</span>
+          <input id="durationMin" name="durationMin" type="number" min="1" step="1" value="3">
+        </label>
+
+        <label class="check">
+          <input id="notify5min" name="notify5min" type="checkbox" checked>
+          <span>5分前通知</span>
+        </label>
+
+        <label class="field">
+          <span>対象</span>
+          <input id="target" name="target" type="text" value="家族" autocomplete="off">
+        </label>
+
+        <label class="field wide">
+          <span>自由メッセージ</span>
+          <textarea id="message" name="message" rows="3" placeholder="WAVがない場合のTTS本文"></textarea>
+        </label>
+
+        <div class="actions wide">
+          <button class="primary" type="submit">保存</button>
+          <button id="clearToday" type="button">今日の予約削除</button>
+          <button id="reloadList" type="button">一覧更新</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="list-head">
+        <h2>現在の予約一覧</h2>
+        <span id="listDate"></span>
+      </div>
+      <div id="alertList" class="list"></div>
+    </section>
+  </main>
+</body>
+</html>

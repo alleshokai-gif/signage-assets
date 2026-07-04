@@ -1333,6 +1333,18 @@
     setInterval(tickClockVoice, 5 * 1000); // ★15秒→5秒推奨（分変化ガードあるから軽い）
     tickClockVoice(); // ★起動直後に1回
 
+    async function tickAlertCheck(){
+      const result = await requestRadioItems('alert_check');
+      console.log('[ALERT CHECK]', {
+        matched: result?.debug?.matched ?? null,
+        itemsLength: result?.itemsLength ?? 0
+      });
+    }
+
+    console.log('[BOOT] start alert_check loop', new Date().toString());
+    setInterval(tickAlertCheck, 30 * 1000);
+    tickAlertCheck();
+
     function nextSpeakHm_(hmNow){
       const times = CLOCK_SPEAK_TIMES.slice().sort(); // "06:55"みたいな文字列想定
       for (const t of times) if (t > hmNow) return t;
