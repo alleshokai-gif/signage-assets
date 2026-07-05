@@ -33,25 +33,28 @@
         <p class="eyebrow">Signage Admin</p>
         <h1>アラート設定</h1>
       </div>
-      <div id="status" class="status">ready</div>
-    </header>
-
-    <section class="panel device-panel">
-      <div>
-        <div class="device-label">現在の端末</div>
-        <strong>Alert device : <span id="alertDeviceCurrent">-</span></strong>
+      <div class="statusArea">
+        <div id="status" class="status">ready</div>
+        <button id="deviceSettingsButton" class="deviceSettingsButton" type="button" aria-label="端末設定" aria-expanded="false">⚙</button>
+        <div id="deviceSettingsPanel" class="deviceSettingsPanel" hidden>
+          <h2>端末設定</h2>
+          <label class="field">
+            <span>Alert device</span>
+            <select id="deviceSelect">
+              <option value="living">living : リビング / シャオ美 / Alert有効</option>
+              <option value="fire">fire : Fire実験機 / Alert無効</option>
+              <option value="pc">pc : PC / Alert無効</option>
+              <option value="off">off : Alert停止</option>
+            </select>
+          </label>
+          <div id="deviceCurrentLabel" class="deviceCurrentLabel">現在: -</div>
+          <div class="deviceSettingsActions">
+            <button id="deviceCancelButton" type="button">キャンセル</button>
+            <button id="deviceSaveButton" class="primary" type="button">保存してリロード</button>
+          </div>
+        </div>
       </div>
-      <label class="field device-select">
-        <span>Alert Device</span>
-        <select id="alertDeviceSelect">
-          <option value="living">living（リビング／シャオ美／Alert有効）</option>
-          <option value="fire">fire（Fire実験機／Alert無効）</option>
-          <option value="pc">pc（PC／Alert無効）</option>
-          <option value="off">off（Alert停止）</option>
-        </select>
-      </label>
-      <button id="alertDeviceSave" type="button">保存してリロード</button>
-    </section>
+    </header>
 
     <section class="panel">
       <form id="alertForm" class="form">

@@ -24,11 +24,20 @@ const $ = (id) => document.getElementById(id);
 
 const ALERT_DEVICE_STORAGE_KEY = "SIGNAGE_ALERT_DEVICE_ID";
 const ALERT_DEVICE_OPTIONS = ["living", "fire", "pc", "off"];
+const ALERT_DEVICE_LABELS = {
+  living: "living（Alert有効）",
+  fire: "fire（Alert無効）",
+  pc: "pc（Alert無効）",
+  off: "off（Alert停止）"
+};
 
 const REQUIRED_DOM_IDS = [
-  "alertDeviceCurrent",
-  "alertDeviceSelect",
-  "alertDeviceSave",
+  "deviceSettingsButton",
+  "deviceSettingsPanel",
+  "deviceSelect",
+  "deviceCurrentLabel",
+  "deviceSaveButton",
+  "deviceCancelButton",
   "alertForm",
   "category",
   "mode",
@@ -120,13 +129,60 @@ function resolveAlertDevice() {
 }
 
 function initializeAlertDeviceControls() {
-  $("alertDeviceCurrent").textContent = ALERT_DEVICE_ID;
-  $("alertDeviceSelect").value = ALERT_DEVICE_ID;
-  $("alertDeviceSave").addEventListener("click", () => {
-    const nextDevice = normalizeAlertDevice($("alertDeviceSelect").value) || "off";
+  const button = $("deviceSettingsButton");
+  const panel = $("deviceSettingsPanel");
+  const select = $("deviceSelect");
+  const current = $("deviceCurrentLabel");
+  const save = $("deviceSaveButton");
+  const cancel = $("deviceCancelButton");
+
+  const closePanel = () => {
+    panel.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  };
+  const openPanel = () => {
+    select.value = ALERT_DEVICE_ID;
+    updateAlertDeviceCurrentLabel();
+    panel.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    select.focus();
+  };
+  const togglePanel = () => {
+    if (panel.hidden) openPanel();
+    else closePanel();
+  };
+
+  select.value = ALERT_DEVICE_ID;
+  updateAlertDeviceCurrentLabel();
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    togglePanel();
+  });
+
+  panel.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  select.addEventListener("change", updateAlertDeviceCurrentLabel);
+
+  cancel.addEventListener("click", closePanel);
+
+  save.addEventListener("click", () => {
+    const nextDevice = normalizeAlertDevice(select.value) || "off";
     localStorage.setItem(ALERT_DEVICE_STORAGE_KEY, nextDevice);
     location.reload();
   });
+
+  document.addEventListener("click", closePanel);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closePanel();
+  });
+
+  function updateAlertDeviceCurrentLabel() {
+    const device = normalizeAlertDevice(select.value) || ALERT_DEVICE_ID;
+    current.textContent = `現在: ${ALERT_DEVICE_LABELS[device] || device}`;
+  }
 }
 
 function bindEvents() {

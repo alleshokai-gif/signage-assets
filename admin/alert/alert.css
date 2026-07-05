@@ -33,6 +33,7 @@ button, input, select, textarea {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
   margin-bottom: 18px;
 }
 
@@ -59,30 +60,67 @@ h1, h2 { margin: 0; }
   color: var(--danger);
 }
 
+.statusArea {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.deviceSettingsButton {
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+}
+
+.deviceSettingsPanel {
+  position: absolute;
+  right: 0;
+  top: 48px;
+  width: min(320px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  z-index: 1000;
+}
+
+.deviceSettingsPanel[hidden] {
+  display: none;
+}
+
+.deviceSettingsPanel h2 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
+.deviceCurrentLabel {
+  margin-top: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.deviceSettingsActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
 .panel {
   margin-bottom: 16px;
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-}
-
-.device-panel {
-  display: flex;
-  align-items: end;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.device-label {
-  margin-bottom: 4px;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.device-select {
-  min-width: min(360px, 100%);
 }
 
 .form {
@@ -210,8 +248,8 @@ button.primary {
 
 @media (max-width: 760px) {
   .shell { padding: 16px; }
-  .header { display: block; }
-  .status { display: inline-flex; margin-top: 12px; }
+  .header { align-items: flex-start; }
+  .statusArea { flex-shrink: 0; }
   .form { grid-template-columns: 1fr; }
   .item { grid-template-columns: 1fr; }
 }
