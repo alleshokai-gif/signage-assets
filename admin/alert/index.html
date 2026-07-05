@@ -10,14 +10,19 @@
       const version = window.APP_VERSION || "dev";
       const url = new URL(location.href);
       if (url.searchParams.get("v") !== version) {
+        window.ALERT_VERSION_REDIRECTING = true;
         url.searchParams.set("v", version);
         location.replace(url.toString());
         return;
       }
 
       const cacheKey = encodeURIComponent(version);
-      document.write(`<link rel="stylesheet" href="alert.css?v=${cacheKey}">`);
-      document.write(`<script src="alert.js?v=${cacheKey}" defer><\\/script>`);
+      window.ALERT_CACHE_KEY = cacheKey;
+
+      const style = document.createElement("link");
+      style.rel = "stylesheet";
+      style.href = `alert.css?v=${cacheKey}`;
+      document.head.appendChild(style);
     })();
   </script>
 </head>
@@ -30,6 +35,23 @@
       </div>
       <div id="status" class="status">ready</div>
     </header>
+
+    <section class="panel device-panel">
+      <div>
+        <div class="device-label">現在の端末</div>
+        <strong>Alert device : <span id="alertDeviceCurrent">-</span></strong>
+      </div>
+      <label class="field device-select">
+        <span>Alert Device</span>
+        <select id="alertDeviceSelect">
+          <option value="living">living（リビング／シャオ美／Alert有効）</option>
+          <option value="fire">fire（Fire実験機／Alert無効）</option>
+          <option value="pc">pc（PC／Alert無効）</option>
+          <option value="off">off（Alert停止）</option>
+        </select>
+      </label>
+      <button id="alertDeviceSave" type="button">保存してリロード</button>
+    </section>
 
     <section class="panel">
       <form id="alertForm" class="form">
@@ -105,6 +127,22 @@
       <div id="alertList" class="list"></div>
     </section>
   </main>
-  <div class="appVersion">v<script>document.write(window.APP_VERSION || 'dev')</script></div>
+  <div class="appVersion">v<span id="appVersionText"></span></div>
+  <script>
+    (() => {
+      if (window.ALERT_VERSION_REDIRECTING) return;
+
+      const version = window.APP_VERSION || "dev";
+      const cacheKey = window.ALERT_CACHE_KEY || encodeURIComponent(version);
+      const versionText = document.getElementById("appVersionText");
+      if (versionText) versionText.textContent = version;
+
+      const script = document.createElement("script");
+      script.async = false;
+      script.src = `alert.js?v=${cacheKey}`;
+      script.defer = true;
+      document.body.appendChild(script);
+    })();
+  </script>
 </body>
 </html>

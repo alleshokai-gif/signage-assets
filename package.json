@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "bump-version": "node tools/bump-version.js",
+    "release": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/release-signage.ps1"
+  }
+}

@@ -67,6 +67,24 @@ h1, h2 { margin: 0; }
   background: var(--panel);
 }
 
+.device-panel {
+  display: flex;
+  align-items: end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.device-label {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.device-select {
+  min-width: min(360px, 100%);
+}
+
 .form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

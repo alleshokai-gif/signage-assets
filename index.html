@@ -321,11 +321,53 @@
       color: #fff;
       pointer-events: none;
     }
+
+    .alertDevicePanel{
+      position: fixed;
+      right: 12px;
+      top: 12px;
+      z-index: 70;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 12px;
+      background: rgba(0,0,0,.42);
+      color: rgba(255,255,255,.92);
+      font: 700 12px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+      backdrop-filter: blur(8px);
+    }
+    .alertDevicePanel select,
+    .alertDevicePanel button{
+      min-height: 30px;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 8px;
+      background: rgba(255,255,255,.10);
+      color: #fff;
+      font: inherit;
+    }
+    .alertDevicePanel select{ padding: 0 8px; }
+    .alertDevicePanel option{ color: #111; }
+    .alertDevicePanel button{
+      padding: 0 10px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div id="topMask"></div>
   <div class="appVersion">v<script>document.write(window.APP_VERSION || 'dev')</script></div>
+  <div class="alertDevicePanel" aria-label="この端末のAlert設定">
+    <span>この端末のAlert設定</span>
+    <select id="alertDeviceSelect" aria-label="Alert Device">
+      <option value="living">living（リビング／シャオ美／Alert有効）</option>
+      <option value="fire">fire（Fire実験機／Alert無効）</option>
+      <option value="pc">pc（PC／Alert無効）</option>
+      <option value="off">off（Alert停止）</option>
+    </select>
+    <button id="alertDeviceSave" type="button">保存</button>
+  </div>
 
   <div id="rtClock" class="rtClock">
     <span id="rtDate" class="rtDate"></span>
@@ -362,6 +404,9 @@
       </button>
       <button class="mBtn" data-page="game"  aria-label="game">
         <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_GAME.png" alt="game">
+      </button>
+      <button class="mBtn" data-page="alert" aria-label="アラート" title="アラート">
+        <img src="https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_alert.png" alt="アラート" onerror="this.onerror=null;this.src='https://alleshokai-gif.github.io/signage-assets/assets/icons/ICON_TEMP.png';">
       </button>
     </div>
   </div>
@@ -495,6 +540,7 @@
       school:  { immersive:true },
       temp:    { immersive:true },
       schedule:{ immersive:true },
+      alert:   { immersive:true },
     };
 
     const PAGES = {
@@ -504,19 +550,35 @@
       finance: { url: 'https://datastudio.google.com/embed/reporting/27c09c89-3b08-46f8-bc49-db0d6e60c3fe/page/p_o097sqvuzd', auto:true, immersive:true },
       schedule:{ url: 'https://alleshokai-gif.github.io/signage-assets/calendar', auto:true, immersive:true }, // ★ここ
       game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan', auto:false, immersive:true },
+      alert:   { url: 'https://alleshokai-gif.github.io/signage-assets/admin/alert/', auto:false, immersive:true },
     };
     
     // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxImsH4sWBlEbYaiEl4X7mUmAsuzr3j8hRJeg7Hlq6fXSQRh79XCGB8PoX7arfbPrnbXQ/exec';
     const SIGNAGE_API_TOKEN = 'SIGNAGE_API_TOKEN_PLACEHOLDER';
-    const ALERT_DEVICE_ID = (() => {
-      const qs = new URLSearchParams(location.search);
-      const explicit = qs.get('alertDevice') || localStorage.getItem('SIGNAGE_ALERT_DEVICE_ID');
-      if (explicit) return String(explicit).trim();
+    const ALERT_DEVICE_STORAGE_KEY = 'SIGNAGE_ALERT_DEVICE_ID';
+    const ALERT_DEVICE_OPTIONS = ['living', 'fire', 'pc', 'off'];
+    function normalizeAlertDevice_(value){
+      const device = String(value || '').trim();
+      return ALERT_DEVICE_OPTIONS.includes(device) ? device : '';
+    }
+    function defaultAlertDevice_(){
       if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'pc';
       return 'living';
+    }
+    const ALERT_DEVICE_ID = (() => {
+      const qs = new URLSearchParams(location.search);
+      const fromUrl = normalizeAlertDevice_(qs.get('alertDevice'));
+      if (fromUrl) {
+        localStorage.setItem(ALERT_DEVICE_STORAGE_KEY, fromUrl);
+        return fromUrl;
+      }
+
+      const stored = normalizeAlertDevice_(localStorage.getItem(ALERT_DEVICE_STORAGE_KEY));
+      return stored || defaultAlertDevice_();
     })();
     const ALERT_CHECK_ENABLED = ALERT_DEVICE_ID === 'living';
+    console.log(`[alert device]\ndevice=${ALERT_DEVICE_ID}\nenabled=${ALERT_CHECK_ENABLED}`);
     function withGasApiToken_(url){
       const u = new URL(url);
       u.searchParams.set('token', SIGNAGE_API_TOKEN);
@@ -538,6 +600,8 @@
     const menu = document.getElementById('menu');
     const menuWrap   = document.getElementById('menuWrap');
     const menuHandle = document.getElementById('menuHandle');
+    const alertDeviceSelect = document.getElementById('alertDeviceSelect');
+    const alertDeviceSave = document.getElementById('alertDeviceSave');
 
     const rtClock = document.getElementById('rtClock');
 
@@ -561,6 +625,17 @@
     updateRtClock();
 
     toast.textContent = '';   // ← これ追加
+
+    if (alertDeviceSelect) alertDeviceSelect.value = ALERT_DEVICE_ID;
+    if (alertDeviceSave && alertDeviceSelect) {
+      alertDeviceSave.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const nextDevice = normalizeAlertDevice_(alertDeviceSelect.value) || 'off';
+        localStorage.setItem(ALERT_DEVICE_STORAGE_KEY, nextDevice);
+        location.reload();
+      });
+    }
+
     // ====== state ======
     let currentPage = null;
     let navToken = 0;

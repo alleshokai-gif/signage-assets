@@ -22,13 +22,112 @@ const MODE_OPTIONS = {
 
 const $ = (id) => document.getElementById(id);
 
-document.addEventListener("DOMContentLoaded", () => {
+const ALERT_DEVICE_STORAGE_KEY = "SIGNAGE_ALERT_DEVICE_ID";
+const ALERT_DEVICE_OPTIONS = ["living", "fire", "pc", "off"];
+
+const REQUIRED_DOM_IDS = [
+  "alertDeviceCurrent",
+  "alertDeviceSelect",
+  "alertDeviceSave",
+  "alertForm",
+  "category",
+  "mode",
+  "date",
+  "time",
+  "durationMin",
+  "notify5min",
+  "target",
+  "message",
+  "clearToday",
+  "reloadList",
+  "showHistory",
+  "listDate",
+  "alertList",
+  "status"
+];
+
+let isInitialized = false;
+const ALERT_DEVICE_ID = resolveAlertDevice();
+const ALERT_CHECK_ENABLED = ALERT_DEVICE_ID === "living";
+console.log(`[alert device]\ndevice=${ALERT_DEVICE_ID}\nenabled=${ALERT_CHECK_ENABLED}`);
+
+function initialize() {
+  if (isInitialized) return;
+  isInitialized = true;
+
+  if (!validateInitialDom()) return;
+
+  initializeAlertDeviceControls();
   $("date").value = todayYmd();
   bindEvents();
   updateModeOptions();
   updateTimeMode();
   loadAlerts();
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initialize);
+} else {
+  initialize();
+}
+
+function validateInitialDom() {
+  const missingIds = REQUIRED_DOM_IDS.filter((id) => !$(id));
+  const timeModeInputs = document.querySelectorAll('input[name="timeMode"]');
+  const checkedTimeMode = document.querySelector('input[name="timeMode"]:checked');
+
+  if (timeModeInputs.length === 0) {
+    console.warn('[alert admin] Missing required DOM selector: input[name="timeMode"]');
+  }
+  if (!checkedTimeMode) {
+    console.warn('[alert admin] Missing checked DOM selector: input[name="timeMode"]:checked');
+  }
+  if (missingIds.length > 0) {
+    console.warn("[alert admin] Missing required DOM ids:", missingIds);
+  }
+
+  const isValid = missingIds.length === 0 && timeModeInputs.length > 0 && !!checkedTimeMode;
+  if (!isValid) {
+    const status = $("status");
+    if (status) {
+      status.textContent = "DOM initialization failed";
+      status.classList.toggle("error", true);
+    }
+  }
+  return isValid;
+}
+
+function normalizeAlertDevice(value) {
+  const device = String(value || "").trim();
+  return ALERT_DEVICE_OPTIONS.includes(device) ? device : "";
+}
+
+function defaultAlertDevice() {
+  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") return "pc";
+  return "living";
+}
+
+function resolveAlertDevice() {
+  const qs = new URLSearchParams(location.search);
+  const fromUrl = normalizeAlertDevice(qs.get("alertDevice"));
+  if (fromUrl) {
+    localStorage.setItem(ALERT_DEVICE_STORAGE_KEY, fromUrl);
+    return fromUrl;
+  }
+
+  const stored = normalizeAlertDevice(localStorage.getItem(ALERT_DEVICE_STORAGE_KEY));
+  return stored || defaultAlertDevice();
+}
+
+function initializeAlertDeviceControls() {
+  $("alertDeviceCurrent").textContent = ALERT_DEVICE_ID;
+  $("alertDeviceSelect").value = ALERT_DEVICE_ID;
+  $("alertDeviceSave").addEventListener("click", () => {
+    const nextDevice = normalizeAlertDevice($("alertDeviceSelect").value) || "off";
+    localStorage.setItem(ALERT_DEVICE_STORAGE_KEY, nextDevice);
+    location.reload();
+  });
+}
 
 function bindEvents() {
   $("category").addEventListener("change", () => {
@@ -215,8 +314,13 @@ function normalizeTimeText(value) {
 }
 
 function setStatus(text, isError = false) {
-  $("status").textContent = text;
-  $("status").classList.toggle("error", isError);
+  const status = $("status");
+  if (!status) {
+    console.warn("[alert admin] Missing required DOM id: status");
+    return;
+  }
+  status.textContent = text;
+  status.classList.toggle("error", isError);
 }
 
 function todayYmd() {
