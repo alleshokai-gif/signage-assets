@@ -4,8 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>アラート設定</title>
-  <link rel="stylesheet" href="alert.css">
-  <script src="alert.js" defer></script>
+  <script src="../../assets/version.js?v=1"></script>
+  <script>
+    (() => {
+      const version = window.APP_VERSION || "dev";
+      const url = new URL(location.href);
+      if (url.searchParams.get("v") !== version) {
+        url.searchParams.set("v", version);
+        location.replace(url.toString());
+        return;
+      }
+
+      const cacheKey = encodeURIComponent(version);
+      document.write(`<link rel="stylesheet" href="alert.css?v=${cacheKey}">`);
+      document.write(`<script src="alert.js?v=${cacheKey}" defer><\\/script>`);
+    })();
+  </script>
 </head>
 <body>
   <main class="shell">
@@ -80,10 +94,17 @@
     <section class="panel">
       <div class="list-head">
         <h2>現在の予約一覧</h2>
-        <span id="listDate"></span>
+        <div class="list-tools">
+          <label class="check inline">
+            <input id="showHistory" type="checkbox">
+            <span>履歴も表示</span>
+          </label>
+          <span id="listDate"></span>
+        </div>
       </div>
       <div id="alertList" class="list"></div>
     </section>
   </main>
+  <div class="appVersion">v<script>document.write(window.APP_VERSION || 'dev')</script></div>
 </body>
 </html>

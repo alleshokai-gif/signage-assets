@@ -4,6 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
+  <script src="assets/version.js?v=1"></script>
+  <script>
+    (() => {
+      const version = window.APP_VERSION || "dev";
+      const url = new URL(location.href);
+      if (url.searchParams.get("v") !== version) {
+        url.searchParams.set("v", version);
+        location.replace(url.toString());
+      }
+    })();
+  </script>
   <style>
     :root{
       --menu-h: 150px;            /* アイコンでかめ */
@@ -299,10 +310,22 @@
     @media (max-width: 720px){
       :root{ --icon-size: 82px; --menu-h: 125px; --menu-gap: 12px; }
     }
+
+    .appVersion{
+      position: fixed;
+      right: 8px;
+      bottom: 6px;
+      font-size: 10px;
+      opacity: 0.5;
+      z-index: 9999;
+      color: #fff;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
   <div id="topMask"></div>
+  <div class="appVersion">v<script>document.write(window.APP_VERSION || 'dev')</script></div>
 
   <div id="rtClock" class="rtClock">
     <span id="rtDate" class="rtDate"></span>
@@ -486,6 +509,14 @@
     // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxImsH4sWBlEbYaiEl4X7mUmAsuzr3j8hRJeg7Hlq6fXSQRh79XCGB8PoX7arfbPrnbXQ/exec';
     const SIGNAGE_API_TOKEN = 'SIGNAGE_API_TOKEN_PLACEHOLDER';
+    const ALERT_DEVICE_ID = (() => {
+      const qs = new URLSearchParams(location.search);
+      const explicit = qs.get('alertDevice') || localStorage.getItem('SIGNAGE_ALERT_DEVICE_ID');
+      if (explicit) return String(explicit).trim();
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'pc';
+      return 'living';
+    })();
+    const ALERT_CHECK_ENABLED = ALERT_DEVICE_ID === 'living';
     function withGasApiToken_(url){
       const u = new URL(url);
       u.searchParams.set('token', SIGNAGE_API_TOKEN);
@@ -776,9 +807,16 @@
    *
    * items方式では WAV と TTS を混在して扱える。
    */
-    async function requestRadioItems(reason){
+    async function requestRadioItems(reason, extraParams = {}){
       try{
-        const url = GAS_API_URL + '?reason=' + encodeURIComponent(reason || '');
+        const u = new URL(GAS_API_URL);
+        u.searchParams.set('reason', reason || '');
+        Object.entries(extraParams || {}).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && String(value) !== '') {
+            u.searchParams.set(key, String(value));
+          }
+        });
+        const url = u.toString();
         console.log('[RADIO REQ]', url);
 
         const r = await fetch(withGasApiToken_(url), { cache:'no-store' });
@@ -1334,16 +1372,24 @@
     tickClockVoice(); // ★起動直後に1回
 
     async function tickAlertCheck(){
-      const result = await requestRadioItems('alert_check');
+      const result = await requestRadioItems('alert_check', { device: ALERT_DEVICE_ID });
       console.log('[ALERT CHECK]', {
+        device: ALERT_DEVICE_ID,
+        ok: result?.ok ?? null,
+        slot: result?.slot ?? null,
         matched: result?.debug?.matched ?? null,
-        itemsLength: result?.itemsLength ?? 0
+        itemsLength: result?.itemsLength ?? 0,
+        debug: result?.debug ?? null
       });
     }
 
-    console.log('[BOOT] start alert_check loop', new Date().toString());
-    setInterval(tickAlertCheck, 30 * 1000);
-    tickAlertCheck();
+    if (ALERT_CHECK_ENABLED) {
+      console.log('[BOOT] start alert_check loop', { device: ALERT_DEVICE_ID, now: new Date().toString() });
+      setInterval(tickAlertCheck, 30 * 1000);
+      tickAlertCheck();
+    } else {
+      console.log('[BOOT] alert_check disabled on this device', { device: ALERT_DEVICE_ID });
+    }
 
     function nextSpeakHm_(hmNow){
       const times = CLOCK_SPEAK_TIMES.slice().sort(); // "06:55"みたいな文字列想定

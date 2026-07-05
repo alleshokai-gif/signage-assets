@@ -149,6 +149,18 @@ button.primary {
   margin-bottom: 12px;
 }
 
+.list-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.check.inline {
+  min-height: 0;
+  font-size: 14px;
+}
+
 .list {
   display: grid;
   gap: 8px;
@@ -166,6 +178,16 @@ button.primary {
 
 .item small {
   color: var(--muted);
+}
+
+.appVersion {
+  position: fixed;
+  right: 8px;
+  bottom: 6px;
+  font-size: 10px;
+  opacity: 0.5;
+  z-index: 9999;
+  pointer-events: none;
 }
 
 @media (max-width: 760px) {

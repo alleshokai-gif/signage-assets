@@ -42,6 +42,7 @@ function bindEvents() {
 
   $("mode").addEventListener("change", syncDurationFromMode);
   $("date").addEventListener("change", loadAlerts);
+  $("showHistory").addEventListener("change", loadAlerts);
   $("reloadList").addEventListener("click", loadAlerts);
   $("clearToday").addEventListener("click", clearTodayAlerts);
   $("alertForm").addEventListener("submit", saveAlert);
@@ -75,12 +76,13 @@ function syncDurationFromMode() {
 async function saveAlert(event) {
   event.preventDefault();
   setStatus("saving...");
+  const date = normalizeDateForApi($("date").value);
 
   const params = new URLSearchParams({
     action: "setAlert",
     category: $("category").value,
     mode: $("mode").value,
-    date: $("date").value,
+    date,
     time: $("time").value,
     durationMin: $("durationMin").value,
     notify5min: String($("notify5min").checked),
@@ -100,7 +102,7 @@ async function saveAlert(event) {
 }
 
 async function loadAlerts() {
-  const date = $("date").value || todayYmd();
+  const date = normalizeDateForApi($("date").value || todayYmd());
   $("listDate").textContent = date;
   setStatus("loading...");
 
@@ -112,8 +114,17 @@ async function loadAlerts() {
 
   try {
     const json = await callApi(params);
+    console.log("[listAlerts response]", json);
     if (!json.ok) throw new Error(json.error || "listAlerts failed");
-    renderAlerts(json.alerts || []);
+    const alerts = extractAlertsFromResponse(json);
+    const visibleAlerts = filterAlertsForDisplay(alerts);
+    console.log("[listAlerts render]", {
+      count: visibleAlerts.length,
+      total: alerts.length,
+      showHistory: $("showHistory").checked,
+      debug: json.debug || null
+    });
+    renderAlerts(visibleAlerts);
     setStatus("ready");
   } catch (error) {
     setStatus(error.message, true);
@@ -121,7 +132,7 @@ async function loadAlerts() {
 }
 
 async function clearTodayAlerts() {
-  const date = $("date").value || todayYmd();
+  const date = normalizeDateForApi($("date").value || todayYmd());
   if (!confirm(`${date} の未再生アラートを無効化しますか？`)) return;
   setStatus("clearing...");
 
@@ -142,7 +153,9 @@ async function clearTodayAlerts() {
 }
 
 async function callApi(params) {
-  const response = await fetch(`${GAS_API_URL}?${params.toString()}`, { cache: "no-store" });
+  const url = `${GAS_API_URL}?${params.toString()}`;
+  console.log("[alert API]", url);
+  const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
@@ -156,7 +169,7 @@ function renderAlerts(alerts) {
   $("alertList").innerHTML = alerts.map((alert) => `
     <article class="item">
       <div>
-        <strong>${escapeHtml(alert.fire_time || "")}</strong><br>
+        <strong>${escapeHtml(displayAlertTime(alert))}</strong><br>
         <small>${escapeHtml(alert.status || "")}</small>
       </div>
       <div>
@@ -170,6 +183,37 @@ function renderAlerts(alerts) {
   `).join("");
 }
 
+function filterAlertsForDisplay(alerts) {
+  if ($("showHistory").checked) return alerts;
+  return alerts.filter((alert) => String(alert.status || "").toLowerCase() === "waiting");
+}
+
+function extractAlertsFromResponse(json) {
+  if (Array.isArray(json?.alerts)) return json.alerts;
+  if (Array.isArray(json?.alarms)) return json.alarms;
+  if (Array.isArray(json?.items)) return json.items;
+  if (Array.isArray(json?.data?.alerts)) return json.data.alerts;
+  return [];
+}
+
+function displayAlertTime(alert) {
+  const date = normalizeDateForApi($("date").value || todayYmd());
+  const fireTime = normalizeTimeText(alert.fire_time);
+  const fireDateTime = String(alert.fire_datetime || "");
+  const m = fireDateTime.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+  if (m && m[1] === date) return m[2];
+  if (m) return `${m[1]} ${m[2]}`;
+  if (fireTime) return fireTime;
+  return fireDateTime || "";
+}
+
+function normalizeTimeText(value) {
+  const s = String(value || "").trim();
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return "";
+  return `${String(Number(m[1])).padStart(2, "0")}:${m[2]}`;
+}
+
 function setStatus(text, isError = false) {
   $("status").textContent = text;
   $("status").classList.toggle("error", isError);
@@ -178,6 +222,13 @@ function setStatus(text, isError = false) {
 function todayYmd() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function normalizeDateForApi(value) {
+  const s = String(value || "").trim();
+  const m = s.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);
+  if (!m) return todayYmd();
+  return `${m[1]}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[3])).padStart(2, "0")}`;
 }
 
 function escapeHtml(value) {
