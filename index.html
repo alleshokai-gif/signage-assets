@@ -321,53 +321,11 @@
       color: #fff;
       pointer-events: none;
     }
-
-    .alertDevicePanel{
-      position: fixed;
-      right: 12px;
-      top: 12px;
-      z-index: 70;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-      border: 1px solid rgba(255,255,255,.18);
-      border-radius: 12px;
-      background: rgba(0,0,0,.42);
-      color: rgba(255,255,255,.92);
-      font: 700 12px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
-      backdrop-filter: blur(8px);
-    }
-    .alertDevicePanel select,
-    .alertDevicePanel button{
-      min-height: 30px;
-      border: 1px solid rgba(255,255,255,.24);
-      border-radius: 8px;
-      background: rgba(255,255,255,.10);
-      color: #fff;
-      font: inherit;
-    }
-    .alertDevicePanel select{ padding: 0 8px; }
-    .alertDevicePanel option{ color: #111; }
-    .alertDevicePanel button{
-      padding: 0 10px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
   <div id="topMask"></div>
   <div class="appVersion">v<script>document.write(window.APP_VERSION || 'dev')</script></div>
-  <div class="alertDevicePanel" aria-label="この端末のAlert設定">
-    <span>この端末のAlert設定</span>
-    <select id="alertDeviceSelect" aria-label="Alert Device">
-      <option value="living">living（リビング／シャオ美／Alert有効）</option>
-      <option value="fire">fire（Fire実験機／Alert無効）</option>
-      <option value="pc">pc（PC／Alert無効）</option>
-      <option value="off">off（Alert停止）</option>
-    </select>
-    <button id="alertDeviceSave" type="button">保存</button>
-  </div>
 
   <div id="rtClock" class="rtClock">
     <span id="rtDate" class="rtDate"></span>
@@ -600,8 +558,6 @@
     const menu = document.getElementById('menu');
     const menuWrap   = document.getElementById('menuWrap');
     const menuHandle = document.getElementById('menuHandle');
-    const alertDeviceSelect = document.getElementById('alertDeviceSelect');
-    const alertDeviceSave = document.getElementById('alertDeviceSave');
 
     const rtClock = document.getElementById('rtClock');
 
@@ -625,16 +581,6 @@
     updateRtClock();
 
     toast.textContent = '';   // ← これ追加
-
-    if (alertDeviceSelect) alertDeviceSelect.value = ALERT_DEVICE_ID;
-    if (alertDeviceSave && alertDeviceSelect) {
-      alertDeviceSave.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        const nextDevice = normalizeAlertDevice_(alertDeviceSelect.value) || 'off';
-        localStorage.setItem(ALERT_DEVICE_STORAGE_KEY, nextDevice);
-        location.reload();
-      });
-    }
 
     // ====== state ======
     let currentPage = null;
