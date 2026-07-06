@@ -34,6 +34,7 @@
         <h1>アラート設定</h1>
       </div>
       <div class="statusArea">
+        <a class="topBackButton" href="../../index.html">← TOPへ戻る</a>
         <div id="status" class="status">ready</div>
         <button id="deviceSettingsButton" class="deviceSettingsButton" type="button" aria-label="端末設定" aria-expanded="false">⚙</button>
         <div id="deviceSettingsPanel" class="deviceSettingsPanel" hidden>
@@ -79,21 +80,31 @@
 
         <fieldset class="field mode-field">
           <legend>方式</legend>
-          <label><input type="radio" name="timeMode" value="absolute" checked> 時刻指定</label>
-          <label><input type="radio" name="timeMode" value="relative"> 相対タイマー</label>
+          <label><input type="radio" name="timeMode" value="absolute" checked> 時刻を指定する</label>
+          <label><input type="radio" name="timeMode" value="relative"> 何分後に鳴らす</label>
         </fieldset>
 
-        <label class="field">
-          <span>出発時刻</span>
+        <label id="timeField" class="field">
+          <span id="timeLabel">出発時刻</span>
           <input id="time" name="time" type="time" value="08:00">
         </label>
 
-        <label class="field">
-          <span>タイマー分数</span>
-          <input id="durationMin" name="durationMin" type="number" min="1" step="1" value="3">
-        </label>
+        <div id="durationField" class="field duration-field">
+          <span>何分後</span>
+          <div class="duration-input">
+            <input id="durationMin" name="durationMin" type="number" min="1" step="1" value="3">
+            <span>分後</span>
+          </div>
+          <div class="quickTimers" aria-label="クイック選択">
+            <span>クイック選択:</span>
+            <button type="button" data-duration="3">3分</button>
+            <button type="button" data-duration="5">5分</button>
+            <button type="button" data-duration="10">10分</button>
+            <button type="button" data-duration="30">30分</button>
+          </div>
+        </div>
 
-        <label class="check">
+        <label id="notifyField" class="check">
           <input id="notify5min" name="notify5min" type="checkbox" checked>
           <span>5分前通知</span>
         </label>
@@ -103,9 +114,13 @@
           <input id="target" name="target" type="text" value="家族" autocomplete="off">
         </label>
 
-        <label class="field wide">
-          <span>自由メッセージ</span>
-          <textarea id="message" name="message" rows="3" placeholder="WAVがない場合のTTS本文"></textarea>
+        <div id="voiceStatus" class="voice-status wide" aria-live="polite"></div>
+
+        <label id="messageField" class="field wide message-field">
+          <span>読み上げメッセージ</span>
+          <textarea id="message" name="message" rows="3" placeholder="例：洗濯物を取り込むのだ"></textarea>
+          <small id="messageHelp">定型音声がない場合、または自由通知で読み上げる文章</small>
+          <small>通常は定型のずんだもん音声を使います。自由通知や定型音声がない場合は入力メッセージを読み上げます。</small>
         </label>
 
         <div class="actions wide">

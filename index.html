@@ -60,12 +60,28 @@
       left: 0; right: 0;
       display: none;
       z-index: 120;
-      pointer-events: auto;
+      pointer-events: none;
       text-align: center;
       color: rgba(255,255,255,.92);
       text-shadow: 0 6px 18px rgba(0,0,0,.55);
       letter-spacing: .04em;
       white-space: nowrap;
+    }
+
+    .rtClockTapTarget{
+      display: inline-flex;
+      align-items: baseline;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      background: transparent;
+      color: inherit;
+      text-shadow: inherit;
+      letter-spacing: inherit;
+      white-space: inherit;
+      cursor: pointer;
+      pointer-events: auto;
+      -webkit-tap-highlight-color: transparent;
     }
 
     /* 日付：1.5倍 */
@@ -199,15 +215,44 @@
       border-radius: 0;
       pointer-events:none;
     }
+
+    .adminGearButton{
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 180;
+      width: 42px;
+      height: 42px;
+      min-width: 42px;
+      min-height: 42px;
+      padding: 0;
+      border: 1px solid rgba(255,255,255,.28);
+      border-radius: 999px;
+      background: rgba(0,0,0,.34);
+      color: rgba(255,255,255,.92);
+      font-size: 22px;
+      line-height: 1;
+      box-shadow: 0 8px 18px rgba(0,0,0,.35);
+      cursor: pointer;
+      pointer-events: auto;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .adminGearButton:active{
+      transform: scale(0.96);
+      background: rgba(255,255,255,.16);
+    }
+
     .subModal{
       position:fixed; inset:0;
       display:none;
-      z-index: 200;
+      z-index: 240;
       background: rgba(0,0,0,.55);
       align-items:center;
       justify-content:center;
+      pointer-events: none;
     }
-    .subModal.show{ display:flex; }
+    .subModal.show{ display:flex; pointer-events: auto; }
     
     .subPanel{
       width: min(640px, 92vw);
@@ -328,12 +373,14 @@
   <div class="appVersion">v<script>document.write(window.APP_VERSION || 'dev')</script></div>
 
   <div id="rtClock" class="rtClock">
-    <span id="rtDate" class="rtDate"></span>
-    <span id="rtDow"  class="rtDow"></span>
-    <span id="rtTime" class="rtTime">
-      <span id="rtHM" class="rtHM"></span>
-      <span id="rtSec" class="rtSec"></span>
-    </span>
+    <button id="rtClockTapTarget" class="rtClockTapTarget" type="button" aria-label="今日は何日？">
+      <span id="rtDate" class="rtDate"></span>
+      <span id="rtDow"  class="rtDow"></span>
+      <span id="rtTime" class="rtTime">
+        <span id="rtHM" class="rtHM"></span>
+        <span id="rtSec" class="rtSec"></span>
+      </span>
+    </button>
   </div>
 
   <iframe id="view" class="view active" src="about:blank"></iframe>
@@ -341,6 +388,7 @@
 
   <!-- デバッグ -->
   <div id="toast">boot...</div>
+  <button id="adminGearButton" class="adminGearButton" type="button" aria-label="管理メニュー" title="管理メニュー">⚙</button>
 
   <!-- メニュー（下部に重ね） -->
   <div id="menuWrap">
@@ -560,6 +608,7 @@
     const menuHandle = document.getElementById('menuHandle');
 
     const rtClock = document.getElementById('rtClock');
+    const rtClockTapTarget = document.getElementById('rtClockTapTarget');
 
     const rtDate = document.getElementById('rtDate');
     const rtDow  = document.getElementById('rtDow');
@@ -609,7 +658,7 @@
       }
     }
 
-    rtClock.addEventListener('pointerdown', (e)=>{
+    rtClockTapTarget.addEventListener('pointerdown', (e)=>{
       console.log('CLOCKTAP7');
       e.preventDefault();
       e.stopPropagation();
@@ -619,6 +668,13 @@
         console.error('speakClockNow failed', err);
       }
     }, true);
+
+    document.getElementById('adminGearButton')?.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      stopAuto();
+      location.href = './admin/index.html';
+    });
 
     function speakClockNow(){
       const d = new Date();

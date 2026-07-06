@@ -68,6 +68,25 @@ h1, h2 { margin: 0; }
   margin-left: auto;
 }
 
+.topBackButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+}
+
+.topBackButton:active {
+  transform: scale(0.98);
+}
+
 .deviceSettingsButton {
   width: 40px;
   min-height: 40px;
@@ -148,6 +167,107 @@ h1, h2 { margin: 0; }
   background: #fff;
 }
 
+.field small {
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.field.is-hidden,
+.check.is-hidden {
+  display: none;
+}
+
+.duration-field {
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.duration-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.duration-input input {
+  max-width: 120px;
+}
+
+.quickTimers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.quickTimers button {
+  min-height: 34px;
+  padding: 0 10px;
+  border-color: #93c5fd;
+  background: #fff;
+  color: var(--accent);
+}
+
+.quickTimers button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.duration-field.is-emphasis {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.message-field.is-required {
+  padding: 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+}
+
+.message-field.is-required textarea {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.voice-status {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.voice-status.ok {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.voice-status.warn {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.voice-status.tts {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.voice-status small {
+  display: block;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .mode-field {
   margin: 0;
   padding: 0;
@@ -224,16 +344,71 @@ button.primary {
 
 .item {
   display: grid;
-  grid-template-columns: 120px 1fr 120px;
-  gap: 10px;
-  padding: 10px 12px;
+  grid-template-columns: 96px 1fr 140px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
 }
 
+.itemTime {
+  color: var(--text);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.itemMain {
+  display: grid;
+  gap: 4px;
+}
+
+.itemMain strong {
+  font-size: 1.05rem;
+}
+
+.itemMeta {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
 .item small {
   color: var(--muted);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.status-waiting {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-played {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-expired {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .appVersion {
@@ -252,4 +427,5 @@ button.primary {
   .statusArea { flex-shrink: 0; }
   .form { grid-template-columns: 1fr; }
   .item { grid-template-columns: 1fr; }
+  .itemMeta { justify-items: start; }
 }

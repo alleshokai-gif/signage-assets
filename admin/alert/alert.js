@@ -3,8 +3,8 @@ const SIGNAGE_API_TOKEN = "SIGNAGE_API_TOKEN_PLACEHOLDER";
 
 const MODE_OPTIONS = {
   outing: [
-    ["gakudo", "学童出発"],
-    ["school", "学校出発"],
+    ["gakudo", "学童"],
+    ["school", "学校"],
     ["lesson", "習い事"],
     ["custom", "自由"]
   ],
@@ -19,6 +19,22 @@ const MODE_OPTIONS = {
     ["custom", "自由"]
   ]
 };
+
+const VOICE_KEY_MAP = {
+  "outing:gakudo:five_min": "ZUNDA_OUTING_5MIN",
+  "outing:gakudo:depart": "ZUNDA_OUTING_NOW",
+  "outing:school:five_min": "ZUNDA_OUTING_5MIN",
+  "outing:school:depart": "ZUNDA_OUTING_NOW",
+  "outing:lesson:five_min": "ZUNDA_OUTING_5MIN",
+  "outing:lesson:depart": "ZUNDA_OUTING_NOW",
+  "kitchen:ramen3:done": "ZUNDA_TIMER_RAMEN_DONE",
+  "kitchen:ramen5:done": "ZUNDA_TIMER_RAMEN_DONE",
+  "kitchen:timer3:done": "ZUNDA_TIMER_DONE",
+  "kitchen:timer5:done": "ZUNDA_TIMER_DONE"
+};
+
+const VOICE_BASE_URL = "../../assets/voice/";
+const voiceFileStatusCache = new Map();
 
 const $ = (id) => document.getElementById(id);
 
@@ -42,10 +58,16 @@ const REQUIRED_DOM_IDS = [
   "category",
   "mode",
   "date",
+  "timeField",
+  "timeLabel",
   "time",
+  "durationField",
   "durationMin",
+  "notifyField",
   "notify5min",
   "target",
+  "voiceStatus",
+  "messageField",
   "message",
   "clearToday",
   "reloadList",
@@ -187,20 +209,56 @@ function initializeAlertDeviceControls() {
 
 function bindEvents() {
   $("category").addEventListener("change", () => {
+    applyCategoryDefaults();
     updateModeOptions();
     updateTimeMode();
   });
 
   document.querySelectorAll('input[name="timeMode"]').forEach((input) => {
-    input.addEventListener("change", updateTimeMode);
+    input.addEventListener("change", () => {
+      updateTimeMode();
+      updateVoiceStatus();
+    });
   });
 
-  $("mode").addEventListener("change", syncDurationFromMode);
+  $("mode").addEventListener("change", () => {
+    syncDurationFromMode();
+    updateVoiceStatus();
+  });
   $("date").addEventListener("change", loadAlerts);
+  $("durationMin").addEventListener("input", () => {
+    updateQuickTimerActive();
+    updateVoiceStatus();
+  });
+  $("notify5min").addEventListener("change", updateVoiceStatus);
+  $("message").addEventListener("input", updateVoiceStatus);
+  document.querySelectorAll("[data-duration]").forEach((button) => {
+    button.addEventListener("click", () => {
+      $("durationMin").value = button.dataset.duration || "3";
+      updateQuickTimerActive();
+      updateVoiceStatus();
+    });
+  });
   $("showHistory").addEventListener("change", loadAlerts);
   $("reloadList").addEventListener("click", loadAlerts);
   $("clearToday").addEventListener("click", clearTodayAlerts);
   $("alertForm").addEventListener("submit", saveAlert);
+}
+
+function applyCategoryDefaults() {
+  const category = $("category").value;
+  if (category === "outing") {
+    setTimeMode("absolute");
+    $("notify5min").checked = true;
+  } else if (category === "kitchen") {
+    setTimeMode("relative");
+    $("notify5min").checked = false;
+  }
+}
+
+function setTimeMode(value) {
+  const input = document.querySelector(`input[name="timeMode"][value="${value}"]`);
+  if (input) input.checked = true;
 }
 
 function updateModeOptions() {
@@ -209,27 +267,51 @@ function updateModeOptions() {
     .map(([value, label]) => `<option value="${value}">${label}</option>`)
     .join("");
   syncDurationFromMode();
+  updateVoiceStatus();
 }
 
 function updateTimeMode() {
   const category = $("category").value;
   if (category === "kitchen") {
-    document.querySelector('input[name="timeMode"][value="relative"]').checked = true;
+    setTimeMode("relative");
   }
   const timeMode = document.querySelector('input[name="timeMode"]:checked').value;
+  $("timeField").classList.toggle("is-hidden", timeMode !== "absolute");
+  $("durationField").classList.toggle("is-hidden", timeMode !== "relative");
+  $("durationField").classList.toggle("is-emphasis", category === "kitchen");
+  $("notifyField").classList.toggle("is-hidden", category === "kitchen");
+  $("timeLabel").textContent = category === "outing" ? "出発時刻" : "時刻";
   $("time").disabled = timeMode !== "absolute";
   $("durationMin").disabled = timeMode !== "relative";
   $("notify5min").disabled = category === "kitchen";
+  updateQuickTimerActive();
+  updateVoiceStatus();
 }
 
 function syncDurationFromMode() {
   const mode = $("mode").value;
   const match = mode.match(/(\d+)$/);
   if (match) $("durationMin").value = match[1];
+  updateQuickTimerActive();
+}
+
+function updateQuickTimerActive() {
+  const duration = String(Number($("durationMin").value || 0));
+  document.querySelectorAll("[data-duration]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.duration === duration);
+  });
 }
 
 async function saveAlert(event) {
   event.preventDefault();
+  const voiceSummary = await getCurrentVoiceSummary();
+  if (voiceSummary.requiresMessage && !$("message").value.trim()) {
+    setStatus("定型音声がないため、読み上げメッセージを入力してください。", true);
+    $("messageField").classList.add("is-required");
+    $("message").focus();
+    return;
+  }
+
   setStatus("saving...");
   const date = normalizeDateForApi($("date").value);
 
@@ -254,6 +336,137 @@ async function saveAlert(event) {
   } catch (error) {
     setStatus(error.message, true);
   }
+}
+
+async function updateVoiceStatus() {
+  const status = $("voiceStatus");
+  status.className = "voice-status wide";
+  status.textContent = "音声状態を確認中...";
+
+  try {
+    const summary = await getCurrentVoiceSummary();
+    renderVoiceSummary(summary);
+    updateMessageRequirement(summary);
+  } catch (error) {
+    status.classList.add("warn");
+    status.textContent = "⚠ 音声状態を確認できません";
+    const detail = document.createElement("small");
+    detail.textContent = error.message || "fetch failed";
+    status.appendChild(detail);
+    updateMessageRequirement({ requiresMessage: $("category").value === "custom" });
+  }
+}
+
+async function getCurrentVoiceSummary() {
+  const category = $("category").value;
+  const mode = $("mode").value;
+  const entries = getVoiceEntries(category, mode);
+
+  if (category === "custom") {
+    return {
+      type: "tts",
+      entries: [],
+      requiresMessage: true,
+      message: "読み上げメッセージで通知します"
+    };
+  }
+
+  if (!entries.length) {
+    return {
+      type: "missing",
+      entries: [],
+      requiresMessage: true,
+      message: "⚠ 定型音声なし。読み上げメッセージを入力してください。"
+    };
+  }
+
+  const checkedEntries = [];
+  for (const entry of entries) {
+    checkedEntries.push({
+      ...entry,
+      fileStatus: await checkVoiceFile(entry.key)
+    });
+  }
+
+  const hasMissing = checkedEntries.some((entry) => entry.fileStatus === "missing");
+  const hasUnknown = checkedEntries.some((entry) => entry.fileStatus === "unknown");
+  return {
+    type: hasMissing ? "missing_file" : hasUnknown ? "unknown" : "wav",
+    entries: checkedEntries,
+    requiresMessage: hasMissing,
+    message: hasMissing
+      ? "⚠ 定型音声ファイルなし。読み上げメッセージを入力してください。"
+      : hasUnknown
+        ? "⚠ 定型音声ファイルを確認できません"
+        : "✅ 定型音声あり"
+  };
+}
+
+function getVoiceEntries(category, mode) {
+  if (category === "outing") {
+    const entries = [];
+    if ($("notify5min").checked) {
+      entries.push({ label: "5分前", key: VOICE_KEY_MAP[`${category}:${mode}:five_min`] || "" });
+    }
+    entries.push({ label: "出発時刻", key: VOICE_KEY_MAP[`${category}:${mode}:depart`] || "" });
+    return entries.filter((entry) => entry.key);
+  }
+
+  if (category === "kitchen") {
+    const key = VOICE_KEY_MAP[`${category}:${mode}:done`] || "";
+    return key ? [{ label: "完了", key }] : [];
+  }
+
+  return [];
+}
+
+async function checkVoiceFile(key) {
+  if (!key) return "missing";
+  if (voiceFileStatusCache.has(key)) return voiceFileStatusCache.get(key);
+
+  try {
+    const response = await fetch(`${VOICE_BASE_URL}${encodeURIComponent(key)}.wav`, {
+      cache: "no-store"
+    });
+    const status = response.ok ? "ok" : "missing";
+    voiceFileStatusCache.set(key, status);
+    return status;
+  } catch (error) {
+    voiceFileStatusCache.set(key, "unknown");
+    return "unknown";
+  }
+}
+
+function renderVoiceSummary(summary) {
+  const status = $("voiceStatus");
+  status.className = "voice-status wide";
+
+  if (summary.type === "tts") {
+    status.classList.add("tts");
+    status.textContent = summary.message;
+    return;
+  }
+
+  if (summary.type === "wav") {
+    status.classList.add("ok");
+  } else {
+    status.classList.add("warn");
+  }
+
+  status.textContent = summary.message;
+  summary.entries.forEach((entry) => {
+    const line = document.createElement("small");
+    const mark = entry.fileStatus === "ok" ? "✅" : entry.fileStatus === "missing" ? "⚠" : "確認できません";
+    line.textContent = `${entry.label}: ${mark} ${entry.key}`;
+    status.appendChild(line);
+  });
+}
+
+function updateMessageRequirement(summary = null) {
+  const requiresMessage = summary
+    ? summary.requiresMessage
+    : $("category").value === "custom";
+  $("messageField").classList.toggle("is-required", requiresMessage);
 }
 
 async function loadAlerts() {
@@ -323,19 +536,44 @@ function renderAlerts(alerts) {
 
   $("alertList").innerHTML = alerts.map((alert) => `
     <article class="item">
-      <div>
-        <strong>${escapeHtml(displayAlertTime(alert))}</strong><br>
-        <small>${escapeHtml(alert.status || "")}</small>
+      <div class="itemTime">${escapeHtml(displayAlertTime(alert))}</div>
+      <div class="itemMain">
+        <strong>${escapeHtml(displayAlertLabel(alert))}</strong>
+        <small>${escapeHtml(displayAlertKind(alert.kind))}</small>
       </div>
-      <div>
-        <strong>${escapeHtml(alert.label || alert.mode || "")}</strong><br>
-        <small>${escapeHtml(alert.message || alert.key || "")}</small>
-      </div>
-      <div>
+      <div class="itemMeta">
+        <span class="statusBadge ${escapeHtml(statusClassName(alert.status))}">${escapeHtml(alert.status || "")}</span>
         <small>${escapeHtml(alert.category || "")}/${escapeHtml(alert.kind || "")}</small>
       </div>
     </article>
   `).join("");
+}
+
+function displayAlertLabel(alert) {
+  const label = String(alert.label || "").trim();
+  const mode = String(alert.mode || "").trim();
+  if (alert.category === "outing") {
+    if (mode === "gakudo") return "学童";
+    if (mode === "school") return "学校";
+    if (mode === "lesson") return "習い事";
+  }
+  return label || mode || alert.message || alert.key || "";
+}
+
+function displayAlertKind(kind) {
+  return ({
+    five_min: "5分前",
+    depart: "出発時刻",
+    done: "完了",
+    custom: "通知"
+  })[String(kind || "")] || String(kind || "");
+}
+
+function statusClassName(status) {
+  const normalized = String(status || "").toLowerCase();
+  return ["waiting", "played", "disabled", "expired"].includes(normalized)
+    ? `status-${normalized}`
+    : "";
 }
 
 function filterAlertsForDisplay(alerts) {

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>電力ポータル</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b12;
+      --panel: rgba(255,255,255,.08);
+      --panel-strong: rgba(255,255,255,.13);
+      --line: rgba(255,255,255,.16);
+      --text: rgba(255,255,255,.94);
+      --muted: rgba(255,255,255,.66);
+      --accent: #5eead4;
+      --warn: #fbbf24;
+      --shadow: 0 18px 42px rgba(0,0,0,.36);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(94,234,212,.16), transparent 32rem),
+        linear-gradient(180deg, #101827 0%, var(--bg) 58%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    a { font: inherit; }
+
+    .shell {
+      width: min(1040px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      letter-spacing: .02em;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 800;
+    }
+
+    .note {
+      margin: 0 0 20px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(0,0,0,.18);
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      display: grid;
+      gap: 7px;
+      min-height: 112px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      text-decoration: none;
+      box-shadow: var(--shadow);
+    }
+
+    .card:active { transform: scale(.99); background: var(--panel-strong); }
+
+    .label {
+      font-size: 1.25rem;
+      font-weight: 850;
+    }
+
+    .desc,
+    .url {
+      color: var(--muted);
+      font-size: .9rem;
+      overflow-wrap: anywhere;
+    }
+
+    .todo { color: var(--warn); }
+
+    @media (max-width: 720px) {
+      .shell { padding: 16px; }
+      .topbar { align-items: flex-start; }
+      .grid { grid-template-columns: 1fr; }
+      .card { min-height: 96px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <h1>電力ポータル</h1>
+      <nav class="actions" aria-label="戻る">
+        <a class="back" href="../index.html">管理メニューへ</a>
+        <a class="back" href="../../index.html">トップへ</a>
+      </nav>
+    </header>
+
+    <p class="note">
+      「電力モニター」はXiaomi自動遷移向けです。「電力分析」はPC管理分析向けです。
+    </p>
+
+    <section id="energyLinks" class="grid" aria-label="電力リンク"></section>
+  </main>
+
+  <script>
+    const ENERGY_URLS = {
+      energyMonitorLooker: "TODO_URL_ENERGY_MONITOR_LOOKER",
+      energyAnalysisLooker: "TODO_URL_ENERGY_ANALYSIS_LOOKER",
+      energySpreadsheet: "TODO_URL_ENERGY_SPREADSHEET",
+      utilityBillSpreadsheet: "TODO_URL_UTILITY_BILL_SPREADSHEET",
+      energyGas: "TODO_URL_ENERGY_GAS"
+    };
+
+    const LINKS = [
+      ["電力モニターLooker", ENERGY_URLS.energyMonitorLooker, "Xiaomi自動遷移向け"],
+      ["電力分析Looker", ENERGY_URLS.energyAnalysisLooker, "PC管理分析向け"],
+      ["EnergyManagementスプレッドシート", ENERGY_URLS.energySpreadsheet, "電力管理データ"],
+      ["Utility billスプレッドシート", ENERGY_URLS.utilityBillSpreadsheet, "請求情報"],
+      ["Apps Script / GAS", ENERGY_URLS.energyGas, "自動処理とAPI"],
+      ["Looker自動遷移用ページ確認", ENERGY_URLS.energyMonitorLooker, "サイネージ表示確認"]
+    ];
+
+    const isTodoUrl = (url) => !url || url === "#" || String(url).startsWith("TODO_");
+
+    document.getElementById("energyLinks").innerHTML = LINKS.map(([label, url, desc]) => {
+      const todo = isTodoUrl(url);
+      const href = todo ? "#" : url;
+      return `
+        <a class="card" href="${href}" ${todo ? 'aria-disabled="true"' : ""}>
+          <span class="label">${label}</span>
+          <span class="desc">${desc}</span>
+          <span class="url ${todo ? "todo" : ""}">${todo ? url : href}</span>
+        </a>
+      `;
+    }).join("");
+  </script>
+</body>
+</html>
