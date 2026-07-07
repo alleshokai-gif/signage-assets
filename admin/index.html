@@ -13,7 +13,7 @@
       --line: rgba(255,255,255,.16);
       --text: rgba(255,255,255,.94);
       --muted: rgba(255,255,255,.66);
-      --accent: #5eead4;
+      --warn: #fbbf24;
       --shadow: 0 18px 42px rgba(0,0,0,.36);
     }
 
@@ -34,7 +34,7 @@
     .shell {
       width: min(1040px, 100%);
       margin: 0 auto;
-      padding: 24px;
+      padding: 24px 24px 180px;
     }
 
     .topbar {
@@ -63,6 +63,7 @@
       color: var(--text);
       text-decoration: none;
       font-weight: 800;
+      cursor: pointer;
     }
 
     .grid {
@@ -86,6 +87,11 @@
 
     .card:active { transform: scale(.99); background: var(--panel-strong); }
 
+    .card[aria-disabled="true"] {
+      pointer-events: none;
+      opacity: .65;
+    }
+
     .label {
       font-size: 1.25rem;
       font-weight: 850;
@@ -97,12 +103,10 @@
       overflow-wrap: anywhere;
     }
 
-    .todo {
-      color: #fbbf24;
-    }
+    .todo { color: var(--warn); }
 
     @media (max-width: 720px) {
-      .shell { padding: 16px; }
+      .shell { padding: 16px 16px 170px; }
       .topbar { align-items: flex-start; }
       .grid { grid-template-columns: 1fr; }
       .card { min-height: 96px; }
@@ -112,8 +116,8 @@
 <body>
   <main class="shell">
     <header class="topbar">
-      <h1>⚙️ 管理メニュー</h1>
-      <a class="back" href="../index.html">戻る</a>
+      <h1>管理メニュー</h1>
+      <button id="topBackButton" class="back" type="button">TOPへ戻る</button>
     </header>
 
     <section id="adminLinks" class="grid" aria-label="管理リンク"></section>
@@ -132,28 +136,41 @@
     };
 
     const LINKS = [
-      ["アラート設定", ADMIN_URLS.alert],
-      ["電力ポータル", ADMIN_URLS.energyPortal],
-      ["電力モニターLooker", ADMIN_URLS.energyMonitorLooker],
-      ["分析用Looker", ADMIN_URLS.energyAnalysisLooker],
-      ["EnergyManagementスプレッドシート", ADMIN_URLS.energySpreadsheet],
-      ["Utility billスプレッドシート", ADMIN_URLS.utilityBillSpreadsheet],
-      ["ファイナンス管理", ADMIN_URLS.financeAdmin],
-      ["システム状態", ADMIN_URLS.systemStatus]
+      { label:"アラート設定", url:ADMIN_URLS.alert, mode:"iframe" },
+      { label:"電力ポータル", url:ADMIN_URLS.energyPortal, mode:"iframe" },
+      { label:"電力モニターLooker", url:ADMIN_URLS.energyMonitorLooker, mode:"iframe" },
+      { label:"電力モニターLooker ↗", url:ADMIN_URLS.energyMonitorLooker, mode:"external" },
+      { label:"電力分析Looker", url:ADMIN_URLS.energyAnalysisLooker, mode:"iframe" },
+      { label:"電力分析Looker ↗", url:ADMIN_URLS.energyAnalysisLooker, mode:"external" },
+      { label:"EnergyManagementスプレッドシート ↗", url:ADMIN_URLS.energySpreadsheet, mode:"external" },
+      { label:"Utility billスプレッドシート ↗", url:ADMIN_URLS.utilityBillSpreadsheet, mode:"external" },
+      { label:"ファイナンス管理 ↗", url:ADMIN_URLS.financeAdmin, mode:"external" },
+      { label:"システム状態 ↗", url:ADMIN_URLS.systemStatus, mode:"external" }
     ];
 
     const isTodoUrl = (url) => !url || url === "#" || String(url).startsWith("TODO_");
 
-    document.getElementById("adminLinks").innerHTML = LINKS.map(([label, url]) => {
+    document.getElementById("adminLinks").innerHTML = LINKS.map(({ label, url, mode }) => {
       const todo = isTodoUrl(url);
       const href = todo ? "#" : url;
+      const externalAttrs = mode === "external" && !todo
+        ? 'target="_blank" rel="noopener noreferrer"'
+        : "";
       return `
-        <a class="card" href="${href}" ${todo ? 'aria-disabled="true"' : ""}>
+        <a class="card" href="${href}" ${externalAttrs} ${todo ? 'aria-disabled="true"' : ""}>
           <span class="label">${label}</span>
           <span class="url ${todo ? "todo" : ""}">${todo ? url : href}</span>
         </a>
       `;
     }).join("");
+
+    document.getElementById("topBackButton").addEventListener("click", () => {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "SIGNAGE_CLOSE_IFRAME" }, "*");
+      } else {
+        location.href = "../index.html";
+      }
+    });
   </script>
 </body>
 </html>

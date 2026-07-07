@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>アラート設定</title>
   <script src="../../assets/version.js?v=1"></script>
   <script>
@@ -34,7 +34,7 @@
         <h1>アラート設定</h1>
       </div>
       <div class="statusArea">
-        <a class="topBackButton" href="../../index.html">← TOPへ戻る</a>
+        <a id="topBackButton" class="topBackButton" href="../../index.html">← TOPへ戻る</a>
         <div id="status" class="status">ready</div>
         <button id="deviceSettingsButton" class="deviceSettingsButton" type="button" aria-label="端末設定" aria-expanded="false">⚙</button>
         <div id="deviceSettingsPanel" class="deviceSettingsPanel" hidden>
@@ -86,7 +86,7 @@
 
         <label id="timeField" class="field">
           <span id="timeLabel">出発時刻</span>
-          <input id="time" name="time" type="time" value="08:00">
+          <input id="time" name="time" type="time" value="08:00" lang="en-US" dir="ltr">
         </label>
 
         <div id="durationField" class="field duration-field">
@@ -161,6 +161,14 @@
       script.defer = true;
       document.body.appendChild(script);
     })();
+  </script>
+  <script>
+    document.getElementById("topBackButton")?.addEventListener("click", (event) => {
+      if (window.parent && window.parent !== window) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "SIGNAGE_CLOSE_IFRAME" }, "*");
+      }
+    });
   </script>
 </body>
 </html>

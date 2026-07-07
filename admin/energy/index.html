@@ -13,7 +13,6 @@
       --line: rgba(255,255,255,.16);
       --text: rgba(255,255,255,.94);
       --muted: rgba(255,255,255,.66);
-      --accent: #5eead4;
       --warn: #fbbf24;
       --shadow: 0 18px 42px rgba(0,0,0,.36);
     }
@@ -30,12 +29,12 @@
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     }
 
-    a { font: inherit; }
+    button, a { font: inherit; }
 
     .shell {
       width: min(1040px, 100%);
       margin: 0 auto;
-      padding: 24px;
+      padding: 24px 24px 180px;
     }
 
     .topbar {
@@ -71,6 +70,7 @@
       color: var(--text);
       text-decoration: none;
       font-weight: 800;
+      cursor: pointer;
     }
 
     .note {
@@ -104,6 +104,11 @@
 
     .card:active { transform: scale(.99); background: var(--panel-strong); }
 
+    .card[aria-disabled="true"] {
+      pointer-events: none;
+      opacity: .65;
+    }
+
     .label {
       font-size: 1.25rem;
       font-weight: 850;
@@ -119,7 +124,7 @@
     .todo { color: var(--warn); }
 
     @media (max-width: 720px) {
-      .shell { padding: 16px; }
+      .shell { padding: 16px 16px 170px; }
       .topbar { align-items: flex-start; }
       .grid { grid-template-columns: 1fr; }
       .card { min-height: 96px; }
@@ -131,13 +136,13 @@
     <header class="topbar">
       <h1>電力ポータル</h1>
       <nav class="actions" aria-label="戻る">
-        <a class="back" href="../index.html">管理メニューへ</a>
-        <a class="back" href="../../index.html">トップへ</a>
+        <a class="back" href="../index.html">管理メニューへ戻る</a>
+        <button id="topBackButton" class="back" type="button">TOPへ戻る</button>
       </nav>
     </header>
 
     <p class="note">
-      「電力モニター」はXiaomi自動遷移向けです。「電力分析」はPC管理分析向けです。
+      Looker は同じ iframe 内で開くボタンを優先しています。Google 側で拒否される場合は ↗ の外部リンクを使います。
     </p>
 
     <section id="energyLinks" class="grid" aria-label="電力リンク"></section>
@@ -153,27 +158,39 @@
     };
 
     const LINKS = [
-      ["電力モニターLooker", ENERGY_URLS.energyMonitorLooker, "Xiaomi自動遷移向け"],
-      ["電力分析Looker", ENERGY_URLS.energyAnalysisLooker, "PC管理分析向け"],
-      ["EnergyManagementスプレッドシート", ENERGY_URLS.energySpreadsheet, "電力管理データ"],
-      ["Utility billスプレッドシート", ENERGY_URLS.utilityBillSpreadsheet, "請求情報"],
-      ["Apps Script / GAS", ENERGY_URLS.energyGas, "自動処理とAPI"],
-      ["Looker自動遷移用ページ確認", ENERGY_URLS.energyMonitorLooker, "サイネージ表示確認"]
+      { label:"電力モニターLooker", url:ENERGY_URLS.energyMonitorLooker, desc:"サイネージ内表示を試す", mode:"iframe" },
+      { label:"電力モニターLooker ↗", url:ENERGY_URLS.energyMonitorLooker, desc:"Google 側で iframe が拒否された場合", mode:"external" },
+      { label:"電力分析Looker", url:ENERGY_URLS.energyAnalysisLooker, desc:"同じ iframe 内で開く", mode:"iframe" },
+      { label:"電力分析Looker ↗", url:ENERGY_URLS.energyAnalysisLooker, desc:"外部タブで開く", mode:"external" },
+      { label:"EnergyManagementスプレッドシート ↗", url:ENERGY_URLS.energySpreadsheet, desc:"Google Spreadsheet は外部リンク", mode:"external" },
+      { label:"Utility billスプレッドシート ↗", url:ENERGY_URLS.utilityBillSpreadsheet, desc:"Google Spreadsheet は外部リンク", mode:"external" },
+      { label:"Apps Script / GAS ↗", url:ENERGY_URLS.energyGas, desc:"Apps Script エディタは外部リンク", mode:"external" }
     ];
 
     const isTodoUrl = (url) => !url || url === "#" || String(url).startsWith("TODO_");
 
-    document.getElementById("energyLinks").innerHTML = LINKS.map(([label, url, desc]) => {
+    document.getElementById("energyLinks").innerHTML = LINKS.map(({ label, url, desc, mode }) => {
       const todo = isTodoUrl(url);
       const href = todo ? "#" : url;
+      const externalAttrs = mode === "external" && !todo
+        ? 'target="_blank" rel="noopener noreferrer"'
+        : "";
       return `
-        <a class="card" href="${href}" ${todo ? 'aria-disabled="true"' : ""}>
+        <a class="card" href="${href}" ${externalAttrs} ${todo ? 'aria-disabled="true"' : ""}>
           <span class="label">${label}</span>
           <span class="desc">${desc}</span>
           <span class="url ${todo ? "todo" : ""}">${todo ? url : href}</span>
         </a>
       `;
     }).join("");
+
+    document.getElementById("topBackButton").addEventListener("click", () => {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "SIGNAGE_CLOSE_IFRAME" }, "*");
+      } else {
+        location.href = "../../index.html";
+      }
+    });
   </script>
 </body>
 </html>

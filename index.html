@@ -38,12 +38,17 @@
       position:absolute; inset:0;
       width:100vw; height:100vh;
       border:0;
+      z-index: 10;
       opacity:0;
       pointer-events:none;
       transition: opacity 180ms linear;
       background:#000;
     }
     .view.active { opacity:1; pointer-events:auto; }
+
+    body.contentFrameActive .view {
+      z-index: 130;
+    }
 
     #topMask{
       position: fixed;
@@ -82,6 +87,49 @@
       cursor: pointer;
       pointer-events: auto;
       -webkit-tap-highlight-color: transparent;
+    }
+
+    .clockVoiceMenu{
+      position: fixed;
+      top: 124px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: min(360px, 82vw);
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 18px;
+      background: rgba(15,15,15,.92);
+      box-shadow: 0 18px 40px rgba(0,0,0,.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms linear, transform 160ms ease;
+    }
+
+    .clockVoiceMenu.show{
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .clockVoiceMenu button{
+      min-height: 54px;
+      border: 0;
+      border-radius: 12px;
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.94);
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .clockVoiceMenu button:active{
+      transform: scale(0.98);
+      background: rgba(255,255,255,.16);
     }
 
     /* 日付：1.5倍 */
@@ -125,7 +173,7 @@
       display:flex;
       align-items:center;
       justify-content:center;
-      z-index: 50;
+      z-index: 160;
       pointer-events: auto;
     
       transition: transform 420ms cubic-bezier(.22,.9,.2,1),
@@ -142,7 +190,7 @@
       position: fixed;
       left: 0; right: 0; bottom: 0;
       height: 24px;            /* 18〜28で好み */
-      z-index: 55;             /* menuWrap(50)より上でOK */
+      z-index: 165;             /* menuWrapより上でOK */
       background: transparent; /* 見えない */
       pointer-events: none;    /* 普段は無効（immersive時だけ有効化） */
     }
@@ -382,6 +430,11 @@
       </span>
     </button>
   </div>
+  <div id="clockVoiceMenu" class="clockVoiceMenu" aria-hidden="true">
+    <button id="clockReadDateBtn" type="button">今日は何日？を読む</button>
+    <button id="clockPlayRadioBtn" type="button">ラジオを流す</button>
+    <button id="clockVoiceCloseBtn" type="button">閉じる</button>
+  </div>
 
   <iframe id="view" class="view active" src="about:blank"></iframe>
 
@@ -557,7 +610,9 @@
       energy:  { url: 'https://datastudio.google.com/embed/reporting/4c3f690d-87ad-4ad1-b1f2-fac126a4a816/page/p_2o3y60glyd', auto:true, immersive:true },
       schedule:{ url: 'https://alleshokai-gif.github.io/signage-assets/calendar', auto:true, immersive:true }, // ★ここ
       game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan', auto:false, immersive:true },
-      alert:   { url: 'https://alleshokai-gif.github.io/signage-assets/admin/alert/', auto:false, immersive:true },
+      alert:   { url: 'https://alleshokai-gif.github.io/signage-assets/admin/alert/', auto:false, immersive:false, contentFrame:true, title:'Alert Admin' },
+      admin:   { url: 'https://alleshokai-gif.github.io/signage-assets/admin/index.html', auto:false, immersive:true, contentFrame:true, title:'Admin Menu' },
+      admin_energy: { url: 'https://alleshokai-gif.github.io/signage-assets/admin/energy/index.html', auto:false, immersive:true, contentFrame:true, title:'Energy Admin' },
     };
     
     // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
@@ -610,6 +665,10 @@
 
     const rtClock = document.getElementById('rtClock');
     const rtClockTapTarget = document.getElementById('rtClockTapTarget');
+    const clockVoiceMenu = document.getElementById('clockVoiceMenu');
+    const clockReadDateBtn = document.getElementById('clockReadDateBtn');
+    const clockPlayRadioBtn = document.getElementById('clockPlayRadioBtn');
+    const clockVoiceCloseBtn = document.getElementById('clockVoiceCloseBtn');
 
     const rtDate = document.getElementById('rtDate');
     const rtDow  = document.getElementById('rtDow');
@@ -663,18 +722,63 @@
       console.log('CLOCKTAP7');
       e.preventDefault();
       e.stopPropagation();
+      toggleClockVoiceMenu();
+    }, true);
+
+    function showClockVoiceMenu(){
+      clockVoiceMenu.classList.add('show');
+      clockVoiceMenu.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeClockVoiceMenu(){
+      clockVoiceMenu.classList.remove('show');
+      clockVoiceMenu.setAttribute('aria-hidden', 'true');
+    }
+
+    function toggleClockVoiceMenu(){
+      if (clockVoiceMenu.classList.contains('show')) {
+        closeClockVoiceMenu();
+      } else {
+        showClockVoiceMenu();
+      }
+    }
+
+    clockReadDateBtn.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      closeClockVoiceMenu();
       try{
         speakClockNow();
       }catch(err){
         console.error('speakClockNow failed', err);
       }
-    }, true);
+    });
+
+    clockPlayRadioBtn.addEventListener('pointerdown', async (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      closeClockVoiceMenu();
+      await requestHomeRadioFromClockMenu();
+    });
+
+    clockVoiceCloseBtn.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      closeClockVoiceMenu();
+    });
+
+    clockVoiceMenu.addEventListener('pointerdown', (e)=> e.stopPropagation());
 
     document.getElementById('adminGearButton')?.addEventListener('pointerdown', (e)=>{
       e.preventDefault();
       e.stopPropagation();
-      stopAuto();
-      location.href = './admin/index.html';
+      openContentFrame(PAGES.admin.url, PAGES.admin.title, { pageKey:'admin' });
+    });
+
+    window.addEventListener('message', (event)=>{
+      if (event?.data?.type === 'SIGNAGE_CLOSE_IFRAME') {
+        goHome({ reason:'iframe-message' });
+      }
     });
 
     function speakClockNow(){
@@ -927,6 +1031,13 @@
       }
     }
 
+    // Radio entry point moved off the HOME button.
+    // The playback implementation remains in requestRadioItems/playRadioQueue above,
+    // and this function is now connected from the clock/date voice menu.
+    async function requestHomeRadioFromClockMenu(){
+      return requestRadioItems('home');
+    }
+
     async function playMorningRadio(){
 
       const todayWeather = "今日は晴れやで。最高気温は14ど。洗濯は外でいけそうや。";
@@ -1033,7 +1144,9 @@
         setToast(`shown${via}: ${page}`);
         resetIdleTimer();
 
+        document.body.classList.toggle('contentFrameActive', !!PAGES[page].contentFrame);
         rtClock.style.display = (page === 'home') ? 'block' : 'none';
+        if (page !== 'home') closeClockVoiceMenu();
 
         // ===== immersive制御 =====
         const immersive = !!PAGES[page].immersive;
@@ -1046,16 +1159,8 @@
           menuHandle.style.pointerEvents = 'none';
         }
 
-        // ====== 🔊 ここがトリガー：home表示確定で鳴らす ======
-        if (page === 'home') {
-          const allow = (reason === 'manual' || reason === 'boot');
-
-          console.log('VOICE TRIGGER check', { page, reason, allow });
-          if (allow) {
-            setToast('VOICE TRIGGER');
-            requestRadioItems('home'); // ★ここを固定にする
-          }
-        }
+        // HOME is top-navigation only. Radio playback was moved to
+        // requestHomeRadioFromClockMenu(), opened from the clock/date text.
       };
 
       // onload来ない保険
@@ -1071,12 +1176,30 @@
       // 遷移
       view.src = url;
     }
+
+    function openContentFrame(url, title='content', { pageKey='' } = {}){
+      const key = pageKey || '__contentFrame';
+      PAGES[key] = {
+        ...(PAGES[key] || {}),
+        url,
+        title,
+        auto: false,
+        immersive: !!PAGES[key]?.immersive,
+        contentFrame: true,
+      };
+      closeClockVoiceMenu();
+      closeSubMenu();
+      clearTimeout(menuTimer);
+      navigate(key, { reason:'manual' });
+    }
     
     function navigateUrl(url, parentKey, { reason='manual' } = {}){
       if (reason === 'manual') stopAuto();
     
       // 遷移開始で時計は消す（home以外）
+      document.body.classList.remove('contentFrameActive');
       rtClock.style.display = 'none';
+      closeClockVoiceMenu();
     
       setMenuActive(parentKey);
     
@@ -1136,6 +1259,9 @@
     }
 
     function goHome({reason='manual'} = {}){
+      closeClockVoiceMenu();
+      closeSubMenu();
+      clearTimeout(menuTimer);
       navigate('home', { reason });
       startAuto(); // ホームは自動巡回復帰スイッチ
     }
@@ -1152,12 +1278,21 @@
       _lastTap = t;
 
       e.preventDefault(); // 余計なclick生成を抑える端末がある
-      sfxUnlock();
-      sfxMenu();
-
       const btn = e.target.closest('.mBtn');
       if (!btn) return;
       const page = btn.dataset.page;
+
+      if (page === 'home') {
+        e.stopPropagation();
+        return goHome({reason:'manual'});
+      }
+
+      sfxUnlock();
+      sfxMenu();
+
+      if (PAGES[page]?.contentFrame) {
+        return openContentFrame(PAGES[page].url, PAGES[page].title || page, { pageKey:page });
+      }
 
       if (page === 'test') {
         // ✅ これが最強：確実に鳴る
@@ -1167,7 +1302,6 @@
         return;
       }
 
-      if (page === 'home') return goHome({reason:'manual'});
       
       // ★ school/game/finance は子メニューを開く
       if (SUB[page]) return openSubMenu(page);
@@ -1294,6 +1428,7 @@
           stopAuto();                // ★ これ追加（サブメニューは navigate 通らんから）
           // ついでに時計は即消す（後述）
           rtClock.style.display = 'none';  // ★ これも追加
+          closeClockVoiceMenu();
       
           if (it.page){
             navigate(it.page, { reason:'manual' });
