@@ -305,6 +305,16 @@ function updateQuickTimerActive() {
 async function saveAlert(event) {
   event.preventDefault();
   const voiceSummary = await getCurrentVoiceSummary();
+  console.log("[alert admin save voice]", {
+    selectedSound: voiceSummary.selectedSound || "",
+    message: $("message").value.trim(),
+    usePresetSound: !!voiceSummary.usePresetSound,
+    entries: (voiceSummary.entries || []).map((entry) => ({
+      label: entry.label,
+      key: entry.key,
+      fileStatus: entry.fileStatus || ""
+    }))
+  });
   if (voiceSummary.requiresMessage && !$("message").value.trim()) {
     setStatus("定型音声がないため、読み上げメッセージを入力してください。", true);
     $("messageField").classList.add("is-required");
@@ -367,6 +377,8 @@ async function getCurrentVoiceSummary() {
       type: "tts",
       entries: [],
       requiresMessage: true,
+      selectedSound: "",
+      usePresetSound: false,
       message: "読み上げメッセージで通知します"
     };
   }
@@ -376,6 +388,8 @@ async function getCurrentVoiceSummary() {
       type: "missing",
       entries: [],
       requiresMessage: true,
+      selectedSound: "",
+      usePresetSound: false,
       message: "⚠ 定型音声なし。読み上げメッセージを入力してください。"
     };
   }
@@ -394,6 +408,8 @@ async function getCurrentVoiceSummary() {
     type: hasMissing ? "missing_file" : hasUnknown ? "unknown" : "wav",
     entries: checkedEntries,
     requiresMessage: hasMissing,
+    selectedSound: checkedEntries.map((entry) => entry.key).filter(Boolean).join(","),
+    usePresetSound: !hasMissing && checkedEntries.some((entry) => entry.key),
     message: hasMissing
       ? "⚠ 定型音声ファイルなし。読み上げメッセージを入力してください。"
       : hasUnknown
@@ -454,6 +470,11 @@ function renderVoiceSummary(summary) {
   }
 
   status.textContent = summary.message;
+  if (summary.usePresetSound) {
+    const note = document.createElement("small");
+    note.textContent = "定型音声ありONの場合、定型音声を優先します。自由文を読み上げたい場合は定型音声をOFFにしてください。";
+    status.appendChild(note);
+  }
   summary.entries.forEach((entry) => {
     const line = document.createElement("small");
     const mark = entry.fileStatus === "ok" ? "✅" : entry.fileStatus === "missing" ? "⚠" : "確認できません";

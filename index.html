@@ -928,13 +928,17 @@
     }
 
     async function playTtsBase64(base64){
+      console.log('[TTS DEBUG] playTtsBase64 called', {
+        hasAudio: !!base64,
+        audioLength: base64 ? String(base64).length : 0
+      });
       const audio = new Audio("data:audio/mpeg;base64," + base64);
       audio.volume = 1.0;
 
       try{
         await audio.play();
       }catch(err){
-        console.error('audio.play failed', err);
+        console.error('[TTS DEBUG] TTS error: audio.play failed', err);
         // ここに toast とか出してもええ
       }
 
@@ -971,6 +975,7 @@
     function playWav(key, base){
       return new Promise(resolve=>{
         const url = base + key + '.wav';
+        console.log('[ALERT DEBUG] playWav called', { key, base, url });
         console.log('[WAV TRY]', { key, url });
 
         const a = new Audio(url);
@@ -986,6 +991,13 @@
 
     async function playRadioQueue(items){
       for(const it of items){
+        console.log('[ALERT DEBUG] playRadioQueue item', {
+          type: it.type || '',
+          selectedSound: it.selectedSound || it.key || '',
+          message: it.message || it.text || '',
+          usePresetSound: !!(it.usePresetSound || it.type === 'wav'),
+          speaker: it.speaker || ''
+        });
 
         // ===== WAV =====
         if(it.type === 'wav'){
@@ -1012,11 +1024,27 @@
             url
           });
 
-          const res = await fetch(withGasApiToken_(url), { cache:'no-store' });
-          const j = await res.json();
+          let res;
+          let j;
+          try {
+            res = await fetch(withGasApiToken_(url), { cache:'no-store' });
+            j = await res.json();
+          } catch (err) {
+            console.error('[TTS DEBUG] TTS error: request failed', {
+              message: err?.message || String(err),
+              item: it
+            });
+            throw err;
+          }
 
           if(j && j.ok && j.audio){
             await playTtsBase64(j.audio);
+          } else {
+            console.error('[TTS DEBUG] TTS error: invalid response', {
+              status: res?.status,
+              response: j,
+              item: it
+            });
           }
           await wait(180);
           continue;
