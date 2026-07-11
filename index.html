@@ -291,6 +291,11 @@
       background: rgba(255,255,255,.16);
     }
 
+    .adminGearButton.hidden{
+      display: none;
+      pointer-events: none;
+    }
+
     .subModal{
       position:fixed; inset:0;
       display:none;
@@ -593,6 +598,15 @@
       }
     });
 
+    const APP_VERSION = window.APP_VERSION || 'dev';
+
+    function withVersionParam_(url, version = APP_VERSION){
+      const [withoutHash, hash = ''] = String(url).split('#');
+      const separator = withoutHash.includes('?') ? '&' : '?';
+      const cacheBusted = `${withoutHash}${separator}v=${encodeURIComponent(version)}`;
+      return hash ? `${cacheBusted}#${hash}` : cacheBusted;
+    }
+
     const GROUP_DEFAULT = {
       finance: { immersive:true },
       game:    { immersive:true },
@@ -610,9 +624,9 @@
       energy:  { url: 'https://datastudio.google.com/embed/reporting/4c3f690d-87ad-4ad1-b1f2-fac126a4a816/page/p_2o3y60glyd', auto:true, immersive:true },
       schedule:{ url: 'https://alleshokai-gif.github.io/signage-assets/calendar', auto:true, immersive:true }, // ★ここ
       game:    { url: 'https://alleshokai-gif.github.io/signage-assets/games/hissan', auto:false, immersive:true },
-      alert:   { url: 'https://alleshokai-gif.github.io/signage-assets/admin/alert/', auto:false, immersive:false, contentFrame:true, title:'Alert Admin' },
-      admin:   { url: 'https://alleshokai-gif.github.io/signage-assets/admin/index.html', auto:false, immersive:true, contentFrame:true, title:'Admin Menu' },
-      admin_energy: { url: 'https://alleshokai-gif.github.io/signage-assets/admin/energy/index.html', auto:false, immersive:true, contentFrame:true, title:'Energy Admin' },
+      alert:   { url: withVersionParam_('admin/alert/'), auto:false, immersive:true },
+      admin:   { url: 'admin/index.html', auto:false, immersive:true },
+      admin_energy: { url: 'admin/energy/index.html', auto:false, immersive:true },
     };
     
     // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
@@ -662,6 +676,7 @@
     const menu = document.getElementById('menu');
     const menuWrap   = document.getElementById('menuWrap');
     const menuHandle = document.getElementById('menuHandle');
+    const adminGearButton = document.getElementById('adminGearButton');
 
     const rtClock = document.getElementById('rtClock');
     const rtClockTapTarget = document.getElementById('rtClockTapTarget');
@@ -769,10 +784,10 @@
 
     clockVoiceMenu.addEventListener('pointerdown', (e)=> e.stopPropagation());
 
-    document.getElementById('adminGearButton')?.addEventListener('pointerdown', (e)=>{
+    adminGearButton?.addEventListener('pointerdown', (e)=>{
       e.preventDefault();
       e.stopPropagation();
-      openContentFrame(PAGES.admin.url, PAGES.admin.title, { pageKey:'admin' });
+      navigate('admin', { reason:'manual' });
     });
 
     window.addEventListener('message', (event)=>{
@@ -874,6 +889,34 @@
       [...menu.querySelectorAll('.mBtn')].forEach(btn => {
         btn.classList.toggle('active', btn.dataset.page === page);
       });
+    }
+
+    function updateAdminGearVisibility(page){
+      if (!adminGearButton) return;
+      const pageDef = PAGES[page] || {};
+      const show = page === 'home' && !pageDef.contentFrame && !pageDef.immersive;
+      adminGearButton.classList.toggle('hidden', !show);
+      adminGearButton.setAttribute('aria-hidden', show ? 'false' : 'true');
+      adminGearButton.tabIndex = show ? 0 : -1;
+    }
+
+    function applyPageChrome(page){
+      const pageDef = PAGES[page] || {};
+      const immersive = !!pageDef.immersive;
+
+      document.body.classList.toggle('contentFrameActive', !!pageDef.contentFrame);
+      rtClock.style.display = (page === 'home') ? 'block' : 'none';
+      if (page !== 'home') closeClockVoiceMenu();
+
+      if (immersive){
+        menuWrap.classList.add('hidden');
+        menuHandle.style.pointerEvents = 'auto';
+      } else {
+        menuWrap.classList.remove('hidden');
+        menuHandle.style.pointerEvents = 'none';
+      }
+
+      updateAdminGearVisibility(page);
     }
 
     function resolveBase_(base){
@@ -1122,10 +1165,10 @@
       if (reason === 'manual') stopAuto();
 
       const url = PAGES[page].url;
-      const menuWrap = document.getElementById('menuWrap');
 
       setToast(`loading: ${page} (${reason})`);
       setMenuActive(page);
+      applyPageChrome(page);
 
       // 前のonloadを外す（レース防止）
       view.onload = null;
@@ -1144,20 +1187,7 @@
         setToast(`shown${via}: ${page}`);
         resetIdleTimer();
 
-        document.body.classList.toggle('contentFrameActive', !!PAGES[page].contentFrame);
-        rtClock.style.display = (page === 'home') ? 'block' : 'none';
-        if (page !== 'home') closeClockVoiceMenu();
-
-        // ===== immersive制御 =====
-        const immersive = !!PAGES[page].immersive;
-        
-        if (immersive){
-          menuWrap.classList.add('hidden');
-          menuHandle.style.pointerEvents = 'auto';
-        } else {
-          menuWrap.classList.remove('hidden');
-          menuHandle.style.pointerEvents = 'none';
-        }
+        applyPageChrome(page);
 
         // HOME is top-navigation only. Radio playback was moved to
         // requestHomeRadioFromClockMenu(), opened from the clock/date text.
@@ -1179,12 +1209,13 @@
 
     function openContentFrame(url, title='content', { pageKey='' } = {}){
       const key = pageKey || '__contentFrame';
+      const existing = PAGES[key] || {};
       PAGES[key] = {
-        ...(PAGES[key] || {}),
+        ...existing,
         url,
         title,
         auto: false,
-        immersive: !!PAGES[key]?.immersive,
+        immersive: !!existing.immersive,
         contentFrame: true,
       };
       closeClockVoiceMenu();
@@ -1197,8 +1228,15 @@
       if (reason === 'manual') stopAuto();
     
       // 遷移開始で時計は消す（home以外）
-      document.body.classList.remove('contentFrameActive');
-      rtClock.style.display = 'none';
+      const key = parentKey || '__url';
+      PAGES[key] = {
+        ...(PAGES[key] || {}),
+        url,
+        auto: false,
+        immersive: !!PAGES[key]?.immersive,
+        contentFrame: false,
+      };
+      applyPageChrome(key);
       closeClockVoiceMenu();
     
       setMenuActive(parentKey);
@@ -1212,8 +1250,9 @@
         if (myToken !== navToken) return;
         settled = true;
     
-        currentPage = parentKey;
+        currentPage = key;
         resetIdleTimer();
+        applyPageChrome(key);
       };
     
       const fb = setTimeout(settle, 2500);
@@ -1291,7 +1330,7 @@
       sfxMenu();
 
       if (PAGES[page]?.contentFrame) {
-        return openContentFrame(PAGES[page].url, PAGES[page].title || page, { pageKey:page });
+        return navigate(page, { reason:'manual' });
       }
 
       if (page === 'test') {
