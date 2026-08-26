@@ -124,8 +124,10 @@
   </main>
 
   <script>
+    const SWITCHBOT_TEMP_LOG_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyWFFM9SES2XgwZrmK5mJojJEMhHi1Zjcq4RgmXROsKCRoZvoC_sTC90GK2rRbY-yed/exec";
     const ADMIN_URLS = {
       alert: "./alert/index.html",
+      climateProfile: SWITCHBOT_TEMP_LOG_WEB_APP_URL + "?mode=climate",
       energyPortal: "./energy/index.html",
       energyMonitorLooker: "https://datastudio.google.com/embed/reporting/4c3f690d-87ad-4ad1-b1f2-fac126a4a816/page/p_2o3y60glyd",
       energyAnalysisLooker: "TODO_URL_ENERGY_ANALYSIS_LOOKER",
@@ -137,6 +139,7 @@
 
     const LINKS = [
       { label:"アラート設定", url:ADMIN_URLS.alert, mode:"iframe" },
+      { label:"空調プロファイル", url:ADMIN_URLS.climateProfile, mode:"iframe" },
       { label:"電力ポータル", url:ADMIN_URLS.energyPortal, mode:"iframe" },
       { label:"電力モニターLooker", url:ADMIN_URLS.energyMonitorLooker, mode:"iframe" },
       { label:"電力モニターLooker ↗", url:ADMIN_URLS.energyMonitorLooker, mode:"external" },

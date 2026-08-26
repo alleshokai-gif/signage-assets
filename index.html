@@ -793,6 +793,8 @@
     window.addEventListener('message', (event)=>{
       if (event?.data?.type === 'SIGNAGE_CLOSE_IFRAME') {
         goHome({ reason:'iframe-message' });
+      } else if (event?.data?.type === 'SIGNAGE_NAVIGATE_ADMIN') {
+        navigate('admin', { reason:'iframe-message' });
       }
     });
 
