@@ -125,6 +125,7 @@
 
   <script>
     const SWITCHBOT_TEMP_LOG_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyWFFM9SES2XgwZrmK5mJojJEMhHi1Zjcq4RgmXROsKCRoZvoC_sTC90GK2rRbY-yed/exec";
+    const FINANCE_DW_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby7ZFU10M8n-JFk3NGS-boRJ_KdJsMaFkm8BTkYmzvDDHilqZpzD2wp2cJyx0ZBZGQK/exec";
     const ADMIN_URLS = {
       alert: "./alert/index.html",
       climateProfile: SWITCHBOT_TEMP_LOG_WEB_APP_URL + "?mode=climate",
@@ -133,7 +134,7 @@
       energyAnalysisLooker: "TODO_URL_ENERGY_ANALYSIS_LOOKER",
       energySpreadsheet: "TODO_URL_ENERGY_SPREADSHEET",
       utilityBillSpreadsheet: "TODO_URL_UTILITY_BILL_SPREADSHEET",
-      financeAdmin: "TODO_URL_FINANCE_ADMIN",
+      financeAdmin: FINANCE_DW_WEB_APP_URL,
       systemStatus: "TODO_URL_SYSTEM_STATUS"
     };
 
@@ -147,7 +148,7 @@
       { label:"電力分析Looker ↗", url:ADMIN_URLS.energyAnalysisLooker, mode:"external" },
       { label:"EnergyManagementスプレッドシート ↗", url:ADMIN_URLS.energySpreadsheet, mode:"external" },
       { label:"Utility billスプレッドシート ↗", url:ADMIN_URLS.utilityBillSpreadsheet, mode:"external" },
-      { label:"ファイナンス管理 ↗", url:ADMIN_URLS.financeAdmin, mode:"external" },
+      { label:"ファイナンスDW ↗", url:ADMIN_URLS.financeAdmin, mode:"external" },
       { label:"システム状態 ↗", url:ADMIN_URLS.systemStatus, mode:"external" }
     ];
 
