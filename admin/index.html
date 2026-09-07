@@ -128,6 +128,7 @@
     const FINANCE_DW_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby7ZFU10M8n-JFk3NGS-boRJ_KdJsMaFkm8BTkYmzvDDHilqZpzD2wp2cJyx0ZBZGQK/exec";
     const ADMIN_URLS = {
       alert: "./alert/index.html",
+      infectionDashboard: "https://pharmacy-portal-private.alle-shokai.workers.dev/index.html",
       climateProfile: SWITCHBOT_TEMP_LOG_WEB_APP_URL + "?mode=climate",
       energyPortal: "./energy/index.html",
       energyMonitorLooker: "https://datastudio.google.com/embed/reporting/4c3f690d-87ad-4ad1-b1f2-fac126a4a816/page/p_2o3y60glyd",
@@ -140,6 +141,7 @@
 
     const LINKS = [
       { label:"アラート設定", url:ADMIN_URLS.alert, mode:"iframe" },
+      { label:"感染症ダッシュボード（PC版） ↗", url:ADMIN_URLS.infectionDashboard, mode:"external" },
       { label:"空調プロファイル", url:ADMIN_URLS.climateProfile, mode:"iframe" },
       { label:"電力ポータル", url:ADMIN_URLS.energyPortal, mode:"iframe" },
       { label:"電力モニターLooker", url:ADMIN_URLS.energyMonitorLooker, mode:"iframe" },
