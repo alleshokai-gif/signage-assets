@@ -402,7 +402,7 @@ async function fetchRange(rangeStartYmd, rangeEndYmd){
   } catch (error) { return {ok:false,events:[],holidays:[],error:'private_unavailable',category:error.category || 'transport'}; }
 }
 function privateCalendarStatusText(category){
-  return ({auth:'合鍵の用途・有効状態を確認してください。',configuration:'設定メニューから用途限定合鍵を保存してください。',storage:'ブラウザの保存領域を利用できません。',transport:'通信できないため予定を取得していません。',parse:'応答を読めないため予定を取得していません。'})[category] || '予定を取得できません。';
+  return ({auth:'合鍵の用途・有効状態を確認してください。',configuration:'設定メニューから用途限定合鍵を保存してください。',storage:'ブラウザの保存領域を利用できません。',transport:'通信できないため予定を取得していません。',parse:'応答を読めないため予定を取得していません。',upstream:'予定サービスまたはカレンダー設定を確認できません。',invalid_range:'予定の取得期間を確認できません。',application:'予定サービスが要求を完了できませんでした。'})[category] || '予定を取得できません。';
 }
 
 /**
@@ -858,3 +858,4 @@ setInterval(refresh, 60*1000);
 </script>
 </body>
 </html>
+
