@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>アラート設定</title>
+  <script src="../../assets/version.js?v=1"></script>
+  <script>
+    (() => {
+      const version = window.APP_VERSION || "dev";
+      const url = new URL(location.href);
+      if (url.searchParams.get("v") !== version) {
+        window.ALERT_VERSION_REDIRECTING = true;
+        url.searchParams.set("v", version);
+        location.replace(url.toString());
+        return;
+      }
+
+      const cacheKey = encodeURIComponent(version);
+      window.ALERT_CACHE_KEY = cacheKey;
+
+      const style = document.createElement("link");
+      style.rel = "stylesheet";
+      style.href = `alert.css?v=${cacheKey}`;
+      document.head.appendChild(style);
+    })();
+  </script>
+<script src="../../assets/signage-boundary.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div>
+        <p class="eyebrow">Signage Admin</p>
+        <h1>アラート設定</h1>
+      </div>
+      <div class="statusArea">
+        <a id="topBackButton" class="topBackButton" href="../../index.html">← TOPへ戻る</a>
+        <div id="status" class="status">ready</div>
+        <button id="deviceSettingsButton" class="deviceSettingsButton" type="button" aria-label="端末設定" aria-expanded="false">⚙</button>
+        <div id="deviceSettingsPanel" class="deviceSettingsPanel" hidden>
+          <h2>端末設定</h2>
+          <label class="field">
+            <span>Alert device</span>
+            <select id="deviceSelect">
+              <option value="living">living : リビング / シャオ美 / Alert有効</option>
+              <option value="fire">fire : Fire実験機 / Alert無効</option>
+              <option value="pc">pc : PC / Alert無効</option>
+              <option value="off">off : Alert停止</option>
+            </select>
+          </label>
+          <div id="deviceCurrentLabel" class="deviceCurrentLabel">現在: -</div>
+          <div class="deviceSettingsActions">
+            <button id="deviceCancelButton" type="button">キャンセル</button>
+            <button id="deviceSaveButton" class="primary" type="button">保存してリロード</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <form id="alertForm" class="form">
+        <label class="field">
+          <span>カテゴリ</span>
+          <select id="category" name="category">
+            <option value="outing">お出かけ</option>
+            <option value="kitchen">キッチンタイマー</option>
+            <option value="custom">自由</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>モード</span>
+          <select id="mode" name="mode"></select>
+        </label>
+
+        <label class="field">
+          <span>日付</span>
+          <input id="date" name="date" type="date">
+        </label>
+
+        <fieldset class="field mode-field">
+          <legend>方式</legend>
+          <label><input type="radio" name="timeMode" value="absolute" checked> 時刻を指定する</label>
+          <label><input type="radio" name="timeMode" value="relative"> 何分後に鳴らす</label>
+        </fieldset>
+
+        <label id="timeField" class="field">
+          <span id="timeLabel">出発時刻</span>
+          <input id="time" name="time" type="time" value="08:00" lang="en-US" dir="ltr">
+        </label>
+
+        <div id="durationField" class="field duration-field">
+          <span>何分後</span>
+          <div class="duration-input">
+            <input id="durationMin" name="durationMin" type="number" min="1" step="1" value="3">
+            <span>分後</span>
+          </div>
+          <div class="quickTimers" aria-label="クイック選択">
+            <span>クイック選択:</span>
+            <button type="button" data-duration="3">3分</button>
+            <button type="button" data-duration="5">5分</button>
+            <button type="button" data-duration="10">10分</button>
+            <button type="button" data-duration="30">30分</button>
+          </div>
+        </div>
+
+        <label id="notifyField" class="check">
+          <input id="notify5min" name="notify5min" type="checkbox" checked>
+          <span>5分前通知</span>
+        </label>
+
+        <label class="field">
+          <span>対象</span>
+          <input id="target" name="target" type="text" value="家族" autocomplete="off">
+        </label>
+
+        <div id="voiceStatus" class="voice-status wide" aria-live="polite"></div>
+
+        <label id="messageField" class="field wide message-field">
+          <span>読み上げメッセージ</span>
+          <textarea id="message" name="message" rows="3" placeholder="例：洗濯物を取り込むのだ"></textarea>
+          <small id="messageHelp">定型音声がない場合、または自由通知で読み上げる文章</small>
+          <small>定型音声ありONの場合、定型音声を優先します。自由文を読み上げたい場合は定型音声をOFFにしてください。</small>
+          <small>通常は定型のずんだもん音声を使います。自由通知や定型音声がない場合は入力メッセージを読み上げます。</small>
+        </label>
+
+        <div class="actions wide">
+          <button class="primary" type="submit">保存</button>
+          <button id="clearToday" type="button">今日の予約削除</button>
+          <button id="reloadList" type="button">一覧更新</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="list-head">
+        <h2>現在の予約一覧</h2>
+        <div class="list-tools">
+          <label class="check inline">
+            <input id="showHistory" type="checkbox">
+            <span>履歴も表示</span>
+          </label>
+          <span id="listDate"></span>
+        </div>
+      </div>
+      <div id="alertList" class="list"></div>
+    </section>
+  </main>
+  <div class="appVersion">v<span id="appVersionText"></span></div>
+  <script>
+    (() => {
+      if (window.ALERT_VERSION_REDIRECTING) return;
+
+      const version = window.APP_VERSION || "dev";
+      const cacheKey = window.ALERT_CACHE_KEY || encodeURIComponent(version);
+      const versionText = document.getElementById("appVersionText");
+      if (versionText) versionText.textContent = version;
+
+      const script = document.createElement("script");
+      script.async = false;
+      script.src = `alert.js?v=${cacheKey}`;
+      script.defer = true;
+      document.body.appendChild(script);
+    })();
+  </script>
+  <script>
+    document.getElementById("topBackButton")?.addEventListener("click", (event) => {
+      if (window.parent && window.parent !== window) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "SIGNAGE_CLOSE_IFRAME" }, "*");
+      }
+    });
+  </script>
+</body>
+</html>
