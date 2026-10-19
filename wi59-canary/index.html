@@ -1009,6 +1009,47 @@
             continue;
           }
 
+          // Keep only safe response metadata in this page's transient memory.
+          if (j && j.diagnostic &&
+              j.diagnostic.buildMarker === 'signage-inworld-canary-diag-20261019-a') {
+            const d = j.diagnostic;
+            const enumValue = (value, allowed) => allowed.includes(value) ? value : null;
+            const safeNumber = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+            let endpointDeploymentId = null;
+            try {
+              const routeParts = new URL(GAS_API_URL, location.href).pathname.split('/');
+              if (routeParts.length === 5 && routeParts[1] === 'macros' &&
+                  routeParts[2] === 's' && routeParts[4] === 'exec') {
+                endpointDeploymentId = routeParts[3];
+              }
+            } catch (_) {}
+            if (endpointDeploymentId) {
+              const safeRecord = {
+                action: 'radioTts',
+                endpointDeploymentId,
+                buildMarker: d.buildMarker,
+                speaker: enumValue(d.speaker, ['shimao', 'peno']),
+                source: enumValue(d.source, ['weather-current', 'peno-selected', 'other']),
+                voice: enumValue(d.voice, ['Satoshi', 'Asuka']),
+                selectedProvider: enumValue(d.selectedProvider, ['inworld', 'google']),
+                provider: enumValue(d.provider, ['inworld', 'google', 'none']),
+                outcome: enumValue(d.outcome, ['success', 'error']),
+                resultCode: enumValue(d.resultCode, [
+                  'inworld_success', 'google_fallback_success', 'google_failure'
+                ]),
+                speechCharacters: safeNumber(d.speechCharacters),
+                providerCharacters: safeNumber(d.providerCharacters),
+                inworldCharacters: safeNumber(d.inworldCharacters),
+                inworldMs: safeNumber(d.inworldMs),
+                googleMs: safeNumber(d.googleMs),
+                totalMs: safeNumber(d.totalMs)
+              };
+              const previous = Array.isArray(window.__signageRadioTtsDiagnostics)
+                ? window.__signageRadioTtsDiagnostics : [];
+              window.__signageRadioTtsDiagnostics = [...previous, safeRecord].slice(-8);
+            }
+          }
+
           if(j && j.ok && j.audio){
             await playTtsBase64(j.audio);
           } else {
@@ -1052,6 +1093,7 @@
     // The playback implementation remains in requestRadioItems/playRadioQueue above,
     // and this function is now connected from the clock/date voice menu.
     async function requestHomeRadioFromClockMenu(){
+      window.__signageRadioTtsDiagnostics = [];
       return requestRadioItems('home');
     }
 
