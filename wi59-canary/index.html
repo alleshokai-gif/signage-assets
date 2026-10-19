@@ -931,6 +931,16 @@
       const resultCodes = [
         'inworld_success', 'google_fallback_success', 'google_failure'
       ];
+      const speakers = ['shimao', 'peno'];
+      const sources = ['weather-current', 'peno-selected', 'other'];
+      const voices = ['Satoshi', 'Asuka'];
+      const fallbackCodes = [
+        'none', 'stage_disabled', 'voice_unavailable', 'source_rejected',
+        'source_not_approved', 'config_invalid', 'text_tag_unsupported',
+        'request_limit', 'budget_limit', 'budget_unavailable', 'credential_invalid',
+        'transport_failed', 'http_failed', 'response_invalid', 'audio_missing',
+        'audio_invalid', 'provider_error'
+      ];
       const safeNumber = value =>
         Number.isSafeInteger(value) && value >= 0 ? String(value) : '—';
       const lines = [];
@@ -941,9 +951,14 @@
               !providers.includes(d.provider)) return;
           const resultCode = resultCodes.includes(d.resultCode) ? d.resultCode : 'unknown';
           const outcome = outcomes.includes(d.outcome) ? d.outcome : 'unknown';
+          const speaker = speakers.includes(d.speaker) ? d.speaker : 'unknown';
+          const source = sources.includes(d.source) ? d.source : 'unknown';
+          const voice = voices.includes(d.voice) ? d.voice : 'unknown';
+          const fallback = fallbackCodes.includes(d.fallback) ? d.fallback : 'unknown';
           lines.push(
-            'TTS ' + (index + 1) + ': ' + d.selectedProvider + ' → ' + d.provider +
-            ' / ' + resultCode + ' / ' + outcome +
+            'TTS ' + (index + 1) + ': ' + speaker + ' / ' + voice + ' / ' + source +
+            '; ' + d.selectedProvider + ' → ' + d.provider +
+            ' / ' + resultCode + ' / ' + outcome + '; fallback ' + fallback +
             '; chars ' + safeNumber(d.speechCharacters) + ' / ' +
             safeNumber(d.providerCharacters) + ' / ' +
             safeNumber(d.inworldCharacters)
@@ -1103,6 +1118,13 @@
                 outcome: enumValue(d.outcome, ['success', 'error']),
                 resultCode: enumValue(d.resultCode, [
                   'inworld_success', 'google_fallback_success', 'google_failure'
+                ]),
+                fallback: enumValue(d.fallback, [
+                  'none', 'stage_disabled', 'voice_unavailable', 'source_rejected',
+                  'source_not_approved', 'config_invalid', 'text_tag_unsupported',
+                  'request_limit', 'budget_limit', 'budget_unavailable', 'credential_invalid',
+                  'transport_failed', 'http_failed', 'response_invalid', 'audio_missing',
+                  'audio_invalid', 'provider_error'
                 ]),
                 speechCharacters: safeNumber(d.speechCharacters),
                 providerCharacters: safeNumber(d.providerCharacters),
