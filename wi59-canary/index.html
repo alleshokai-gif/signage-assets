@@ -927,26 +927,34 @@
 
       return new Promise(resolve=>{
         let settled = false;
-        const finish = () => {
+        const recordPlaybackEvent = event => {
+          if (!Array.isArray(window.__signageRadioPlaybackEvents)) return;
+          window.__signageRadioPlaybackEvents = [
+            ...window.__signageRadioPlaybackEvents,
+            event
+          ].slice(-16);
+        };
+        const finish = event => {
           if (settled) return;
           settled = true;
           audio.onended = null;
           audio.onerror = null;
-          resolve();
+          recordPlaybackEvent(event);
+          resolve(event);
         };
 
         // Register completion handlers before starting playback so a fast
         // ended/error event cannot race handler setup.
-        audio.onended = finish;
-        audio.onerror = finish;
+        audio.onended = () => finish('ended');
+        audio.onerror = () => finish('error');
 
         try{
           const playResult = audio.play();
           if (playResult && typeof playResult.catch === 'function') {
-            playResult.catch(finish);
+            playResult.catch(() => finish('play-rejected'));
           }
         }catch(_){
-          finish();
+          finish('play-threw');
         }
       });
     }
@@ -1103,6 +1111,7 @@
     // and this function is now connected from the clock/date voice menu.
     async function requestHomeRadioFromClockMenu(){
       window.__signageRadioTtsDiagnostics = [];
+      window.__signageRadioPlaybackEvents = [];
       return requestRadioItems('home');
     }
 
