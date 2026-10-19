@@ -922,23 +922,32 @@
     }
 
     async function playTtsBase64(base64){
-      console.log('[TTS DEBUG] playTtsBase64 called', {
-        hasAudio: !!base64,
-        audioLength: base64 ? String(base64).length : 0
-      });
       const audio = new Audio("data:audio/mpeg;base64," + base64);
       audio.volume = 1.0;
 
-      try{
-        await audio.play();
-      }catch(err){
-        console.error('[TTS DEBUG] TTS error: audio.play failed', err);
-        // ここに toast とか出してもええ
-      }
-
       return new Promise(resolve=>{
-        audio.onended = resolve;
-        audio.onerror = resolve; // 失敗しても先へ進める
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          audio.onended = null;
+          audio.onerror = null;
+          resolve();
+        };
+
+        // Register completion handlers before starting playback so a fast
+        // ended/error event cannot race handler setup.
+        audio.onended = finish;
+        audio.onerror = finish;
+
+        try{
+          const playResult = audio.play();
+          if (playResult && typeof playResult.catch === 'function') {
+            playResult.catch(finish);
+          }
+        }catch(_){
+          finish();
+        }
       });
     }
 
