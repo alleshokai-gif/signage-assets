@@ -921,6 +921,55 @@
       return VOICE_BASE;
     }
 
+    function renderCanaryTtsDiagnostics_(){
+      const panel = document.getElementById('canaryTtsDiagnosticsPanel');
+      if (!panel) return;
+
+      const providers = ['inworld', 'google', 'none'];
+      const selectedProviders = ['inworld', 'google'];
+      const outcomes = ['success', 'error'];
+      const resultCodes = [
+        'inworld_success', 'google_fallback_success', 'google_failure'
+      ];
+      const safeNumber = value =>
+        Number.isSafeInteger(value) && value >= 0 ? String(value) : '—';
+      const lines = [];
+
+      if (Array.isArray(window.__signageRadioTtsDiagnostics)) {
+        window.__signageRadioTtsDiagnostics.slice(-8).forEach((d, index) => {
+          if (!d || !selectedProviders.includes(d.selectedProvider) ||
+              !providers.includes(d.provider)) return;
+          const resultCode = resultCodes.includes(d.resultCode) ? d.resultCode : 'unknown';
+          const outcome = outcomes.includes(d.outcome) ? d.outcome : 'unknown';
+          lines.push(
+            'TTS ' + (index + 1) + ': ' + d.selectedProvider + ' → ' + d.provider +
+            ' / ' + resultCode + ' / ' + outcome +
+            '; chars ' + safeNumber(d.speechCharacters) + ' / ' +
+            safeNumber(d.providerCharacters) + ' / ' +
+            safeNumber(d.inworldCharacters)
+          );
+        });
+      }
+
+      const playbackCodes = ['ended', 'error', 'play-rejected', 'play-threw'];
+      const counts = { ended: 0, error: 0, 'play-rejected': 0, 'play-threw': 0 };
+      if (Array.isArray(window.__signageRadioPlaybackEvents)) {
+        window.__signageRadioPlaybackEvents.forEach(event => {
+          if (playbackCodes.includes(event)) counts[event] += 1;
+        });
+      }
+      const totalEvents = playbackCodes.reduce((total, code) => total + counts[code], 0);
+      if (totalEvents) {
+        lines.push(
+          'Playback: ended ' + counts.ended + ', error ' + counts.error +
+          ', rejected ' + counts['play-rejected'] + ', thrown ' + counts['play-threw']
+        );
+      }
+
+      panel.textContent = lines.length ? 'Canary TTS diagnostics\\n' + lines.join('\\n') : '';
+      panel.hidden = lines.length === 0;
+    }
+
     async function playTtsBase64(base64){
       const audio = new Audio("data:audio/mpeg;base64," + base64);
       audio.volume = 1.0;
@@ -933,6 +982,7 @@
             ...window.__signageRadioPlaybackEvents,
             event
           ].slice(-16);
+          renderCanaryTtsDiagnostics_();
         };
         const finish = event => {
           if (settled) return;
@@ -1064,6 +1114,7 @@
               const previous = Array.isArray(window.__signageRadioTtsDiagnostics)
                 ? window.__signageRadioTtsDiagnostics : [];
               window.__signageRadioTtsDiagnostics = [...previous, safeRecord].slice(-8);
+              renderCanaryTtsDiagnostics_();
             }
           }
 
@@ -1112,6 +1163,7 @@
     async function requestHomeRadioFromClockMenu(){
       window.__signageRadioTtsDiagnostics = [];
       window.__signageRadioPlaybackEvents = [];
+      renderCanaryTtsDiagnostics_();
       return requestRadioItems('home');
     }
 
@@ -1755,6 +1807,8 @@
 
 })();
 </script>
+  <div id="canaryTtsDiagnosticsPanel" role="note" aria-label="Canary TTS diagnostics" hidden
+       style="position:fixed;z-index:2147483000;right:8px;bottom:8px;max-width:min(360px,calc(100vw - 16px));max-height:150px;overflow:auto;padding:8px 10px;background:#15202bf2;color:#fff;border:1px solid #8195a5;border-radius:8px;font:11px/1.45 monospace;white-space:pre-wrap;pointer-events:none;"></div>
 </body>
 </html>
 
