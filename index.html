@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.20.2142"></script>
+  <script src="assets/version.js?v=2026.10.20.2233"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -460,6 +460,8 @@
   <div id="clockVoiceMenu" class="clockVoiceMenu" aria-hidden="true">
     <button id="clockReadDateBtn" type="button">今日は何日？を読む</button>
     <button id="clockPlayRadioBtn" type="button">ラジオを流す</button>
+    <button id="localClock1830TestButton" type="button" data-local-only="true">夜の本編を1回再生（実音声）</button>
+    <output id="localClock1830TestOutput" aria-live="polite" hidden></output>
     <button id="clockVoiceCloseBtn" type="button">閉じる</button>
   </div>
 
@@ -817,6 +819,8 @@
     const clockReadDateBtn = document.getElementById('clockReadDateBtn');
     const clockPlayRadioBtn = document.getElementById('clockPlayRadioBtn');
     const clockVoiceCloseBtn = document.getElementById('clockVoiceCloseBtn');
+    const localClock1830TestButton = document.getElementById('localClock1830TestButton');
+    const localClock1830TestOutput = document.getElementById('localClock1830TestOutput');
 
     const rtDate = document.getElementById('rtDate');
     const rtDow  = document.getElementById('rtDow');
@@ -908,6 +912,12 @@
       closeClockVoiceMenu();
       await requestHomeRadioFromClockMenu();
     });
+
+    bindLocalClock1830Test_(
+      localClock1830TestButton,
+      localClock1830TestOutput,
+      requestRadioItems
+    );
 
     clockVoiceCloseBtn.addEventListener('pointerdown', (e)=>{
       e.preventDefault();
@@ -1322,6 +1332,74 @@ async function requestRadioItems(reason,extraParams={}){
   return result;
 }
 
+function localClock1830TestResultText_(result){
+  const allowedRequest=['private_success','private_empty','timeout','authorization_rejected','parse_failure','http_failure','transport_failure','client_unavailable','request_failure','invalid_response','api_rejected','queue_invalid'];
+  const request=allowedRequest.includes(result?.requestOutcome)?result.requestOutcome:'unknown';
+  const queue=['private','fixed fallback'].includes(result?.source)?result.source:'unknown';
+  const count=key=>Number.isSafeInteger(result?.[key])&&result[key]>=0?result[key]:0;
+  const playback=result?.playbackErrorCategory==='none'?'no recorded playback errors':'playback failure recorded';
+  return [
+    'request: '+request,
+    'queue: '+queue,
+    'fixed fallback WAV: '+count('fixedFallbackWavComplete')+' complete / '+count('fixedFallbackWavFailed')+' failed',
+    'fixed fallback TTS: '+count('fixedFallbackTtsComplete')+' complete / '+count('fixedFallbackTtsFailed')+' failed',
+    'private WAV: '+count('privateWavComplete')+' complete / '+count('privateWavFailed')+' failed',
+    'private TTS: '+count('privateTtsComplete')+' complete / '+count('privateTtsFailed')+' failed',
+    'playback: '+playback
+  ].join(' / ');
+}
+function createLocalClock1830TestHandler_(button,output,requestRadioItems){
+  const usedKey='signage.radio.nightReplayOneShot.v1';
+  const lockName='signage.radio.nightReplayOneShot.v1';
+  let attempted=false;
+  return async function(event){
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if(attempted)return null;
+    attempted=true;
+    button.disabled=true;
+    button.setAttribute('aria-busy','true');
+    output.hidden=false;
+    output.textContent='夜の本編を再生します。音声が鳴ります。';
+    try{
+      if(SignageBoundary.credentialStatus()!=='saved'){
+        output.textContent='認証未設定のため再生しません。';
+        return null;
+      }
+      if(!navigator?.locks||typeof navigator.locks.request!=='function'){
+        output.textContent='一回制御が使えないため再生しません。';
+        return null;
+      }
+      const result=await navigator.locks.request(lockName,{mode:'exclusive',ifAvailable:true},async lock=>{
+        if(!lock){
+          output.textContent='別の試験が実行中です。二重再生しません。';
+          return null;
+        }
+        if(localStorage.getItem(usedKey)){
+          output.textContent='この端末では一回再生済みです。';
+          return null;
+        }
+        localStorage.setItem(usedKey,'started');
+        if(localStorage.getItem(usedKey)!=='started')throw Error('one-shot marker did not persist');
+        output.textContent='夜の本編を再生中です。音声が鳴ります。';
+        return await requestRadioItems('clock_1830');
+      });
+      if(result)output.textContent=localClock1830TestResultText_(result);
+      return result;
+    }catch(_){
+      output.textContent='一回再生を開始または完了できませんでした。詳細は表示しません。';
+      return null;
+    }finally{
+      button.setAttribute('aria-busy','false');
+    }
+  };
+}
+function bindLocalClock1830Test_(button,output,requestRadioItems){
+  if(!button||!output)return false;
+  button.addEventListener('click',createLocalClock1830TestHandler_(button,output,requestRadioItems));
+  return true;
+}
+
     // Radio entry point moved off the HOME button.
     // The playback implementation remains in requestRadioItems/playRadioQueue above,
     // and this function is now connected from the clock/date voice menu.
@@ -1329,25 +1407,7 @@ async function requestRadioItems(reason,extraParams={}){
       return requestRadioItems('home');
     }
 
-    async function playMorningRadio(){
-
-      const todayWeather = "今日は晴れやで。最高気温は14ど。洗濯は外でいけそうや。";
-      const schoolInfo = "りおたん、今日は通常日。給食はカレーや。";
-
-      const queue = [
-        { type:'wav', key:'OHA', base: CLOCK_VOICE_BASE },
-
-        { type:'tts', text: todayWeather },
-
-        { type:'wav', key:'UMBRELLA_TODAY', base: VOICE_BASE },
-
-        { type:'tts', text: schoolInfo },
-
-        { type:'wav', key:'PEN', base: CLOCK_VOICE_BASE },
-      ];
-
-      await playRadioQueue(queue);
-    }
+    async 
 
     async function requestCastIfNeeded_(reason){
       try{
@@ -1957,5 +2017,6 @@ async function requestRadioItems(reason,extraParams={}){
 </script>
 </body>
 </html>
+
 
 
