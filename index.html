@@ -1029,19 +1029,30 @@
       const audio = new Audio("data:audio/mpeg;base64," + base64);
       audio.volume = 1.0;
 
-      try{
-        await audio.play();
-      }catch(err){
-        console.error('[TTS DEBUG] TTS error: audio.play failed', err);
-        // ここに toast とか出してもええ
-      }
-
       return new Promise(resolve=>{
-        audio.onended = resolve;
-        audio.onerror = resolve; // 失敗しても先へ進める
+        let settled = false;
+        const finish = event => {
+          if (settled) return;
+          settled = true;
+          audio.onended = null;
+          audio.onerror = null;
+          resolve(event);
+        };
+
+        // Install handlers before play() so a fast event cannot strand the queue.
+        audio.onended = () => finish('ended');
+        audio.onerror = () => finish('error');
+
+        try{
+          const playResult = audio.play();
+          if (playResult && typeof playResult.catch === 'function') {
+            playResult.catch(() => finish('play-rejected'));
+          }
+        }catch(_){
+          finish('play-threw');
+        }
       });
     }
-
     async function ttsTest(){ setToast?.('個別音声テストは利用できません。ラジオ再生を使ってください。'); }
 
     function playWav(key, base){
