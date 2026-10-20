@@ -1098,23 +1098,66 @@
     async function ttsTest(){ setToast?.('個別音声テストは利用できません。ラジオ再生を使ってください。'); }
 
     function playWav(key, base){
-      return new Promise(resolve=>{
-        const url = base + key + '.wav';
-        console.log('[ALERT DEBUG] playWav called', { key, base, url });
-        console.log('[WAV TRY]', { key, url });
-
-        const a = new Audio(url);
-        a.onended = resolve;
-        a.onerror = ()=>{ console.log('❌ 404?', url); resolve(); };
-
-        a.play().catch(err=>{
-          console.log('❌ play fail', url, err);
-          resolve();
-        });
-      });
+  return new Promise(resolve=>{
+    const a = new Audio(base + key + '.wav');
+    let settled = false;
+    const finish = outcome => {
+      if (settled) return;
+      settled = true;
+      a.onended = null;
+      a.onerror = null;
+      resolve(outcome);
+    };
+    a.onended = () => finish('ended');
+    a.onerror = () => finish('error');
+    try {
+      const playResult = a.play();
+      if (playResult && typeof playResult.catch === 'function') playResult.catch(() => finish('play-rejected'));
+    } catch (_) {
+      finish('play-threw');
     }
+  });
+}
 
-    async function playRadioQueue(items){ for(const it of items){ if(it.type==='wav'){ const base=(it.base==='clock')?CLOCK_VOICE_BASE:(it.base)?it.base:VOICE_BASE; await playWav(it.key,base);await wait(180);continue;} if(it.type==='tts'){let j;try{j=await SignageBoundary.request(GAS_API_URL,{action:'radioTts',reason:it.reason,queueId:it.queueId,index:it.index});}catch(err){console.warn('[private TTS unavailable]',{category:err?.category||'transport'});continue;} const d=j&&j.diagnostic;if(d&&d.buildMarker==='signage-inworld-canary-diag-20261019-a'){const ev=(v,a)=>a.includes(v)?v:null;const sn=v=>Number.isSafeInteger(v)&&v>=0?v:null;const rec={selectedProvider:ev(d.selectedProvider,['inworld','google']),provider:ev(d.provider,['inworld','google','none']),outcome:ev(d.outcome,['success','error']),resultCode:ev(d.resultCode,['inworld_success','google_fallback_success','google_failure']),fallback:ev(d.fallback,['none','stage_disabled','voice_unavailable','source_rejected','source_not_approved','config_invalid','text_tag_unsupported','request_limit','budget_limit','budget_unavailable','credential_invalid','transport_failed','http_failed','response_invalid','audio_missing','audio_invalid','provider_error']),speechCharacters:sn(d.speechCharacters),providerCharacters:sn(d.providerCharacters),inworldCharacters:sn(d.inworldCharacters),inworldMs:sn(d.inworldMs),googleMs:sn(d.googleMs),totalMs:sn(d.totalMs)};const old=Array.isArray(window.__signageRadioTtsDiagnostics)?window.__signageRadioTtsDiagnostics:[];window.__signageRadioTtsDiagnostics=[...old,rec].slice(-8);}if(j&&j.ok&&j.audio)await playTtsBase64(j.audio);else console.warn('[private TTS invalid response]');await wait(180);}}}
+    async function playRadioQueue(items){
+  const counts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
+  for(const it of items){
+    if(it.type==='wav'){
+      const base=(it.base==='clock')?CLOCK_VOICE_BASE:(it.base)?it.base:VOICE_BASE;
+      if(await playWav(it.key,base)==='ended')counts.wavComplete++;
+      else counts.wavFailed++;
+      await wait(180);
+      continue;
+    }
+    if(it.type==='tts'){
+      let j;
+      try{
+        j=await SignageBoundary.request(GAS_API_URL,{action:'radioTts',reason:it.reason,queueId:it.queueId,index:it.index});
+      }catch(err){
+        console.warn('[private TTS unavailable]',{category:err?.category||'transport'});
+        counts.ttsFailed++;
+        continue;
+      }
+      const d=j&&j.diagnostic;
+      if(d&&d.buildMarker==='signage-inworld-canary-diag-20261019-a'){
+        const ev=(v,a)=>a.includes(v)?v:null;
+        const sn=v=>Number.isSafeInteger(v)&&v>=0?v:null;
+        const rec={selectedProvider:ev(d.selectedProvider,['inworld','google']),provider:ev(d.provider,['inworld','google','none']),outcome:ev(d.outcome,['success','error']),resultCode:ev(d.resultCode,['inworld_success','google_fallback_success','google_failure']),fallback:ev(d.fallback,['none','stage_disabled','voice_unavailable','source_rejected','source_not_approved','config_invalid','text_tag_unsupported','request_limit','budget_limit','budget_unavailable','credential_invalid','transport_failed','http_failed','response_invalid','audio_missing','audio_invalid','provider_error']),speechCharacters:sn(d.speechCharacters),providerCharacters:sn(d.providerCharacters),inworldCharacters:sn(d.inworldCharacters),inworldMs:sn(d.inworldMs),googleMs:sn(d.googleMs),totalMs:sn(d.totalMs)};
+        const old=Array.isArray(window.__signageRadioTtsDiagnostics)?window.__signageRadioTtsDiagnostics:[];
+        window.__signageRadioTtsDiagnostics=[...old,rec].slice(-8);
+      }
+      if(j&&j.ok&&j.audio){
+        if(await playTtsBase64(j.audio)==='ended')counts.ttsComplete++;
+        else counts.ttsFailed++;
+      }else{
+        console.warn('[private TTS invalid response]');
+        counts.ttsFailed++;
+      }
+      await wait(180);
+    }
+  }
+  return counts;
+}
 
     /**
    * Authenticated private queue result with a fixed fallback.
@@ -1148,40 +1191,29 @@ function radioQueueDiagnosticFallbackCount_(getFallbackItems){
 }
 function radioQueueDiagnosticSummary_(data,getFallbackItems){
   if(!data||data.ok!==true||data.type!=='radio'||data.slot!=='night_prep'||!Array.isArray(data.items)||!data.items.every(isRadioQueueItem_)){
-    return{requestOutcome:'invalid_response',source:'fallback (not played)',fixedIntroCount:radioQueueDiagnosticFallbackCount_(getFallbackItems),ttsReferenceCount:0,errorCategory:'invalid_response'};
+    return{requestOutcome:'invalid_response',source:'fixed fallback (not played)',wavCount:radioQueueDiagnosticFallbackCount_(getFallbackItems),ttsReferenceCount:0,errorCategory:'invalid_response',playback:'not run'};
   }
   const items=data.items;
-  return{
-    requestOutcome:items.length?'success':'success_empty',
-    source:'private',
-    fixedIntroCount:items.filter(item=>item.type==='wav').length,
-    ttsReferenceCount:items.filter(item=>item.type==='tts').length,
-    errorCategory:'none'
-  };
+  return{requestOutcome:items.length?'success':'success_empty',source:'private',wavCount:items.filter(item=>item.type==='wav').length,ttsReferenceCount:items.filter(item=>item.type==='tts').length,errorCategory:'none',playback:'not run'};
 }
 function radioQueueDiagnosticError_(error,getFallbackItems){
-  const fixedIntroCount=radioQueueDiagnosticFallbackCount_(getFallbackItems);
-  const base={source:'fallback (not played)',fixedIntroCount,ttsReferenceCount:0};
-  if(error&&error.code==='SIGNAGE_TRANSPORT_TIMEOUT')
-    return{requestOutcome:'timeout',...base,errorCategory:'timeout'};
-  if(error&&error.category==='auth')
-    return{requestOutcome:'denied',...base,errorCategory:'authorization_rejected'};
-  if(error&&error.category==='application')
-    return{requestOutcome:'denied',...base,errorCategory:'request_rejected'};
-  if(error&&(error.category==='configuration'||error.category==='storage'))
-    return{requestOutcome:'error',...base,errorCategory:'configuration'};
-  if(error&&error.category==='parse')
-    return{requestOutcome:'error',...base,errorCategory:'invalid_response'};
-  if(error&&(error.category==='transport'||error.category==='http'))
-    return{requestOutcome:'error',...base,errorCategory:'transport'};
+  const wavCount=radioQueueDiagnosticFallbackCount_(getFallbackItems);
+  const base={source:'fixed fallback (not played)',wavCount,ttsReferenceCount:0,playback:'not run'};
+  if(error&&error.code==='SIGNAGE_TRANSPORT_TIMEOUT')return{requestOutcome:'timeout',...base,errorCategory:'timeout'};
+  if(error&&error.category==='auth')return{requestOutcome:'denied',...base,errorCategory:'authorization_rejected'};
+  if(error&&error.category==='application')return{requestOutcome:'denied',...base,errorCategory:'request_rejected'};
+  if(error&&(error.category==='configuration'||error.category==='storage'))return{requestOutcome:'error',...base,errorCategory:'configuration'};
+  if(error&&error.category==='parse')return{requestOutcome:'error',...base,errorCategory:'invalid_response'};
+  if(error&&(error.category==='transport'||error.category==='http'))return{requestOutcome:'error',...base,errorCategory:'transport'};
   return{requestOutcome:'error',...base,errorCategory:'request_failure'};
 }
 function formatRadioQueueDiagnosticSummary_(summary){
   return[
     'request: '+summary.requestOutcome,
-    'private/fallback: '+summary.source,
-    '固定intro数: '+summary.fixedIntroCount,
-    'TTS参照数: '+summary.ttsReferenceCount,
+    'queue: '+summary.source,
+    'queue WAV count: '+summary.wavCount,
+    'TTS reference count: '+summary.ttsReferenceCount,
+    'playback: '+(summary.playback||'not run'),
     'error: '+summary.errorCategory
   ].join(' / ');
 }
@@ -1208,27 +1240,86 @@ function createRadioQueue1830DiagnosticHandler_(button,output,request,device,get
     return summary;
   };
 }
+function formatRadioQueuePlaybackSummary_(result){
+  return[
+    'request: '+result.requestOutcome,
+    'queue: '+result.source,
+    'fixed fallback WAV: '+result.fixedFallbackWavComplete+' complete / '+result.fixedFallbackWavFailed+' failed',
+    'fixed fallback TTS: '+result.fixedFallbackTtsComplete+' complete / '+result.fixedFallbackTtsFailed+' failed',
+    'private WAV: '+result.privateWavComplete+' complete / '+result.privateWavFailed+' failed',
+    'private TTS: '+result.privateTtsComplete+' complete / '+result.privateTtsFailed+' failed'
+  ].join(' / ');
+}
 function recordRadioQueueResult_(reason,result){
-  const allowed=['home','manual','boot','radio_test','clock_0655','clock_0720','clock_0740','clock_1830','clock_2100'];if(!allowed.includes(reason))return;
+  const allowed=['home','manual','boot','radio_test','clock_0655','clock_0720','clock_0740','clock_1830','clock_2100'];
+  if(!allowed.includes(reason))return;
+  const keys=['fixedFallbackWavComplete','fixedFallbackWavFailed','fixedFallbackTtsComplete','fixedFallbackTtsFailed','privateWavComplete','privateWavFailed','privateTtsComplete','privateTtsFailed'];
   const record={reason,slot:radioSafeSlot_(result.slot),requestOutcome:result.requestOutcome,privateAvailable:result.privateAvailable,source:result.source,itemCount:result.itemCount,ttsItemCount:result.ttsItemCount,fallbackItemCount:result.fallbackItemCount,playbackErrorCategory:result.playbackErrorCategory};
-  try{const previous=Array.isArray(window.__signageRadioQueueDiagnostics)?window.__signageRadioQueueDiagnostics:[];window.__signageRadioQueueDiagnostics=[...previous,record].slice(-8);}catch(_){}
-  try{const sink=result.requestOutcome==='private_success'?console.info:console.warn;if(typeof sink==='function')sink.call(console,'[RADIO QUEUE]',record);}catch(_){}
+  for(const key of keys)record[key]=Number.isSafeInteger(result[key])&&result[key]>=0?result[key]:0;
+  try{
+    const previous=Array.isArray(window.__signageRadioQueueDiagnostics)?window.__signageRadioQueueDiagnostics:[];
+    window.__signageRadioQueueDiagnostics=[...previous,record].slice(-8);
+  }catch(_){}
+  try{
+    const sink=result.requestOutcome==='private_success'?console.info:console.warn;
+    if(typeof sink==='function')sink.call(console,'[RADIO QUEUE]',record);
+  }catch(_){}
+  if(reason==='clock_1830'&&radioQueue1830DiagnosticResult){
+    radioQueue1830DiagnosticResult.hidden=false;
+    radioQueue1830DiagnosticResult.textContent=formatRadioQueuePlaybackSummary_(record);
+  }
 }
 async function requestRadioItems(reason,extraParams={}){
   const fallback=SignageBoundary.fixedRadioItems(reason);
   const pending=SignageBoundary.request(GAS_API_URL,{reason,...extraParams}).then(data=>({data}),error=>({error}));
-  const first=fallback[0];let firstAttempted=false,playbackFailed=false;
-  try{if(first){firstAttempted=true;await playRadioQueue([first]);}}catch(_){playbackFailed=true;}
-  const out=await pending,requestOutcome=radioQueueOutcome_(out),privateQueueAvailable=requestOutcome==='private_success';
-  const source=privateQueueAvailable?'private':'fixed',serverItems=privateQueueAvailable?out.data.items:fallback;
+  const first=fallback[0];
+  let firstAttempted=false;
+  const fallbackCounts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
+  const privateCounts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
+
+  if(first){
+    firstAttempted=true;
+    Object.assign(fallbackCounts,await playRadioQueue([first]));
+  }
+  const out=await pending;
+  const requestOutcome=radioQueueOutcome_(out);
+  const privateQueueAvailable=requestOutcome==='private_success';
+  const source=privateQueueAvailable?'private':'fixed fallback';
+  const serverItems=privateQueueAvailable?out.data.items:fallback;
   const items=Array.isArray(serverItems)?serverItems.slice():[];
   if(first&&items[0]?.type==='wav'&&items[0]?.key===first.key)items.shift();
-  try{if(items.length)await playRadioQueue(items);}catch(_){playbackFailed=true;}
-  const result={ok:privateQueueAvailable&&!playbackFailed,played:firstAttempted||items.length>0,itemsLength:(firstAttempted?1:0)+items.length,
-    privateAvailable:privateQueueAvailable,source,requestOutcome,itemCount:privateQueueAvailable?out.data.items.length:0,
-    ttsItemCount:privateQueueAvailable?out.data.items.filter(item=>item.type==='tts').length:0,fallbackItemCount:fallback.length,
-    slot:privateQueueAvailable?out.data.slot:'unknown',playbackErrorCategory:playbackFailed?'playback':'none'};
-  recordRadioQueueResult_(reason,result);return result;
+
+  const remainingCounts=items.length?await playRadioQueue(items):{wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
+  const remainingGroup=privateQueueAvailable?privateCounts:fallbackCounts;
+  remainingGroup.wavComplete+=remainingCounts.wavComplete;
+  remainingGroup.wavFailed+=remainingCounts.wavFailed;
+  remainingGroup.ttsComplete+=remainingCounts.ttsComplete;
+  remainingGroup.ttsFailed+=remainingCounts.ttsFailed;
+  const playbackFailed=fallbackCounts.wavFailed+fallbackCounts.ttsFailed+privateCounts.wavFailed+privateCounts.ttsFailed>0;
+
+  const result={
+    ok:privateQueueAvailable&&!playbackFailed,
+    played:firstAttempted||items.length>0,
+    itemsLength:(firstAttempted?1:0)+items.length,
+    privateAvailable:privateQueueAvailable,
+    source,
+    requestOutcome,
+    itemCount:privateQueueAvailable?out.data.items.length:0,
+    ttsItemCount:privateQueueAvailable?out.data.items.filter(item=>item.type==='tts').length:0,
+    fallbackItemCount:fallback.length,
+    slot:privateQueueAvailable?out.data.slot:'unknown',
+    playbackErrorCategory:playbackFailed?'playback':'none',
+    fixedFallbackWavComplete:fallbackCounts.wavComplete,
+    fixedFallbackWavFailed:fallbackCounts.wavFailed,
+    fixedFallbackTtsComplete:fallbackCounts.ttsComplete,
+    fixedFallbackTtsFailed:fallbackCounts.ttsFailed,
+    privateWavComplete:privateCounts.wavComplete,
+    privateWavFailed:privateCounts.wavFailed,
+    privateTtsComplete:privateCounts.ttsComplete,
+    privateTtsFailed:privateCounts.ttsFailed
+  };
+  recordRadioQueueResult_(reason,result);
+  return result;
 }
 
     // Radio entry point moved off the HOME button.
