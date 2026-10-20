@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=1"></script>
+  <script src="assets/version.js?v=2026.10.20.0154"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -580,6 +580,106 @@
   });
 </script>
 <script>
+/* Purpose-limited bearer key, stored only by explicit setup on this HTTPS
+ * origin. No automatic save, enrollment, hardware identifier or login.
+ * Same-origin script/XSS can read the key; it is not a device identity.
+ */
+(function(root) {
+  'use strict';
+  function failure(code,category) { return Object.assign(new Error(code),{code,category}); }
+  function privateUnavailable() { return Promise.reject(failure('SIGNAGE_AUTH_NOT_CONFIGURED','configuration')); }
+  const KEY='signage.scoped-key.v1',PENDING='signage.timer-pending.v1';
+  function validKey(value) { return typeof value==='string' && /^sg1_[A-Za-z0-9_-]{43,128}$/.test(value); }
+  function readCredential() {
+    let value;
+    try { value=root.localStorage.getItem(KEY); }
+    catch (_) { throw failure('SIGNAGE_STORAGE_UNAVAILABLE','storage'); }
+    if (!validKey(value)) throw failure('SIGNAGE_KEY_NOT_CONFIGURED','configuration');
+    return value;
+  }
+  function saveCredential(value) {
+    if (root.location.protocol!=='https:') throw failure('SIGNAGE_HTTPS_REQUIRED','configuration');
+    if (!validKey(value)) throw failure('SIGNAGE_KEY_FORMAT_INVALID','configuration');
+    try {
+      root.localStorage.setItem(KEY,value);
+      if (root.localStorage.getItem(KEY)!==value) throw Error('not persisted');
+    } catch (_) { throw failure('SIGNAGE_STORAGE_UNAVAILABLE','storage'); }
+  }
+  function removeCredential() {
+    try { root.localStorage.removeItem(KEY); }
+    catch (_) { throw failure('SIGNAGE_STORAGE_UNAVAILABLE','storage'); }
+  }
+  function timerOperation(parameters) {
+    const names=['category','mode','date','time','durationMin','notify5min','target'];
+    const signature=JSON.stringify(names.map(name=>String(parameters[name] ?? '')));
+    try {
+      let pending=JSON.parse(root.localStorage.getItem(PENDING) || 'null');
+      if (!pending || pending.signature!==signature) {
+        let id;
+        if(typeof root.crypto.randomUUID==='function') id=root.crypto.randomUUID();
+        else {
+          const bytes=root.crypto.getRandomValues(new Uint8Array(16));
+          bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
+          const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+          id=[hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
+        }
+        pending={signature,id};
+        root.localStorage.setItem(PENDING,JSON.stringify(pending));
+        if(root.localStorage.getItem(PENDING)!==JSON.stringify(pending))throw Error('retry state not persisted');
+      }
+      if (!/^[a-f0-9-]{36}$/.test(pending.id)) throw Error('invalid retry state');
+      return pending;
+    } catch (_) { throw failure('SIGNAGE_RETRY_STORAGE_UNAVAILABLE','storage'); }
+  }
+  async function request(endpoint,parameters) {
+    const credential=readCredential();
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(endpoint || ''))
+      throw failure('SIGNAGE_ENDPOINT_NOT_CONFIGURED','configuration');
+    const pending=parameters.action==='setAlert'?timerOperation(parameters):null;
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),parameters.action==='radioTts'?20000:10000);
+    try {
+      const response=await root.fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({...parameters,...(pending?{operationId:pending.id}:{}),credential}),
+        credentials:'omit',cache:'no-store',signal:controller.signal});
+      if (!response.ok) throw failure('SIGNAGE_TRANSPORT_FAILED','transport');
+      let data;
+      try { data=await response.json(); } catch (_) { throw failure('SIGNAGE_RESPONSE_INVALID','parse'); }
+      if (!data || typeof data!=='object' || typeof data.ok!=='boolean') throw failure('SIGNAGE_RESPONSE_INVALID','parse');
+      if (!data.ok) throw failure('SIGNAGE_REQUEST_REJECTED',data.category || 'application');
+      // Retain the pending ID even after success: rapid clicks/reload must not
+      // register twice. A deliberately new submission clears it explicitly.
+      return data;
+    } catch (error) {
+      if (error.name === 'AbortError') throw failure('SIGNAGE_TRANSPORT_TIMEOUT','transport');
+      if (error.category) throw error;
+      throw failure('SIGNAGE_TRANSPORT_FAILED','transport');
+    } finally { clearTimeout(timeout); }
+  }
+  function fixedRadioItems(reason,now) {
+    let slot=String(reason || '');
+    if (['home','manual','boot','radio_test'].includes(slot)) {
+      const hour=(now || new Date()).getHours();
+      slot=hour<12?'clock_0720':hour<20?'clock_1830':'clock_2100';
+    }
+    const keys={clock_0655:['MORNING_SUMMARY','CLOSE_MORNING_SHORT'],
+      clock_0720:['MORNING_SUMMARY','CLOSE_MORNING'],clock_1830:['NIGHT_SUMMARY','CLOSE_NIGHT'],
+      clock_2100:['NIGHT_SUMMARY','CLOSE_NIGHT_SHORT']}[slot] || [];
+    const items=keys.map(key=>({type:'wav',key}));
+    if (slot==='clock_2100') items.push({type:'wav',base:'clock',key:'NERO'});
+    return items;
+  }
+  function newTimerSubmission() {
+    try { root.localStorage.removeItem(PENDING); }
+    catch (_) { throw failure('SIGNAGE_RETRY_STORAGE_UNAVAILABLE','storage'); }
+  }
+  const api=Object.freeze({request,privateUnavailable,fixedRadioItems,saveCredential,removeCredential,newTimerSubmission,
+    credentialStatus:()=>{try {readCredential();return 'saved';}catch(e){return e.category==='storage'?'storage_unavailable':'not_configured';}}});
+  if (typeof module==='object' && module.exports) module.exports=api;
+  else root.SignageBoundary=api;
+})(typeof globalThis==='object'?globalThis:this);
+</script>
+  <script>
 (() => {
 
   try {
@@ -628,7 +728,6 @@
     
     // ★ GAS Webアプリ（JSON API）のURL（あとで入れる）
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxImsH4sWBlEbYaiEl4X7mUmAsuzr3j8hRJeg7Hlq6fXSQRh79XCGB8PoX7arfbPrnbXQ/exec';
-    const SIGNAGE_API_TOKEN = 'SIGNAGE_API_TOKEN_PLACEHOLDER';
     const ALERT_DEVICE_STORAGE_KEY = 'SIGNAGE_ALERT_DEVICE_ID';
     const ALERT_DEVICE_OPTIONS = ['living', 'fire', 'pc', 'off'];
     function normalizeAlertDevice_(value){
@@ -652,11 +751,7 @@
     })();
     const ALERT_CHECK_ENABLED = ALERT_DEVICE_ID === 'living';
     console.log(`[alert device]\ndevice=${ALERT_DEVICE_ID}\nenabled=${ALERT_CHECK_ENABLED}`);
-    function withGasApiToken_(url){
-      const u = new URL(url);
-      u.searchParams.set('token', SIGNAGE_API_TOKEN);
-      return u.toString();
-    }
+    
     const AUTO_ORDER = Object.keys(PAGES).filter(k => PAGES[k].auto);
     const AUTO_SEC = 60;              // 自動巡回 秒
     const IDLE_HOME_SEC = 300;        // 放置でホーム復帰（任意）
@@ -947,29 +1042,7 @@
       });
     }
 
-    async function ttsTest(){
-      try{
-        setToast?.('TTS test: fetching...');
-
-        const url = GAS_API_URL + '?reason=tts_test&text=' + encodeURIComponent('ぺんおだよ！てすとだよ。');
-
-        const r = await fetch(withGasApiToken_(url), { cache: 'no-store' });
-        const j = await r.json();
-
-        console.log('[TTS TEST RES]', j);
-
-        if (!j.ok) throw new Error(j.error || 'TTS not ok');
-        if (j.type !== 'tts') throw new Error('unexpected type: ' + j.type);
-        if (!j.audio) throw new Error('audio empty');
-
-        setToast?.('TTS test: playing');
-        playTtsBase64(j.audio);
-
-      }catch(err){
-        console.error('TTS test failed', err);
-        setToast?.('TTS test failed');
-      }
-    }
+    async function ttsTest(){ setToast?.('個別音声テストは利用できません。ラジオ再生を使ってください。'); }
 
     function playWav(key, base){
       return new Promise(resolve=>{
@@ -988,68 +1061,7 @@
       });
     }
 
-    async function playRadioQueue(items){
-      for(const it of items){
-        console.log('[ALERT DEBUG] playRadioQueue item', {
-          type: it.type || '',
-          selectedSound: it.selectedSound || it.key || '',
-          message: it.message || it.text || '',
-          usePresetSound: !!(it.usePresetSound || it.type === 'wav'),
-          speaker: it.speaker || ''
-        });
-
-        // ===== WAV =====
-        if(it.type === 'wav'){
-          const base =
-            (it.base === 'clock') ? CLOCK_VOICE_BASE :
-            (it.base) ? it.base :
-            VOICE_BASE;
-
-          await playWav(it.key, base);
-          await wait(180);
-          continue;
-        }
-
-        // ===== TTS =====
-        if(it.type === 'tts'){
-          const url =
-            GAS_API_URL +
-            '?speaker=' + encodeURIComponent(it.speaker || '') +
-            '&text=' + encodeURIComponent(it.text || '');
-
-          console.log('[TTS REQ]', {
-            speaker: it.speaker || '',
-            text: (it.text || '').slice(0, 30),
-            url
-          });
-
-          let res;
-          let j;
-          try {
-            res = await fetch(withGasApiToken_(url), { cache:'no-store' });
-            j = await res.json();
-          } catch (err) {
-            console.error('[TTS DEBUG] TTS error: request failed', {
-              message: err?.message || String(err),
-              item: it
-            });
-            throw err;
-          }
-
-          if(j && j.ok && j.audio){
-            await playTtsBase64(j.audio);
-          } else {
-            console.error('[TTS DEBUG] TTS error: invalid response', {
-              status: res?.status,
-              response: j,
-              item: it
-            });
-          }
-          await wait(180);
-          continue;
-        }
-      }
-    }
+    async function playRadioQueue(items){ for(const it of items){ if(it.type==='wav'){ const base=(it.base==='clock')?CLOCK_VOICE_BASE:(it.base)?it.base:VOICE_BASE; await playWav(it.key,base);await wait(180);continue;} if(it.type==='tts'){let j;try{j=await SignageBoundary.request(GAS_API_URL,{action:'radioTts',reason:it.reason,queueId:it.queueId,index:it.index});}catch(err){console.warn('[private TTS unavailable]',{category:err?.category||'transport'});continue;} const d=j&&j.diagnostic;if(d&&d.buildMarker==='signage-inworld-canary-diag-20261019-a'){const ev=(v,a)=>a.includes(v)?v:null;const sn=v=>Number.isSafeInteger(v)&&v>=0?v:null;const rec={selectedProvider:ev(d.selectedProvider,['inworld','google']),provider:ev(d.provider,['inworld','google','none']),outcome:ev(d.outcome,['success','error']),resultCode:ev(d.resultCode,['inworld_success','google_fallback_success','google_failure']),fallback:ev(d.fallback,['none','stage_disabled','voice_unavailable','source_rejected','source_not_approved','config_invalid','text_tag_unsupported','request_limit','budget_limit','budget_unavailable','credential_invalid','transport_failed','http_failed','response_invalid','audio_missing','audio_invalid','provider_error']),speechCharacters:sn(d.speechCharacters),providerCharacters:sn(d.providerCharacters),inworldCharacters:sn(d.inworldCharacters),inworldMs:sn(d.inworldMs),googleMs:sn(d.googleMs),totalMs:sn(d.totalMs)};const old=Array.isArray(window.__signageRadioTtsDiagnostics)?window.__signageRadioTtsDiagnostics:[];window.__signageRadioTtsDiagnostics=[...old,rec].slice(-8);}if(j&&j.ok&&j.audio)await playTtsBase64(j.audio);else console.warn('[private TTS invalid response]');await wait(180);}}}
 
     /**
    * 現行のRadio Items API呼び出し。
@@ -1059,47 +1071,7 @@
    *
    * items方式では WAV と TTS を混在して扱える。
    */
-    async function requestRadioItems(reason, extraParams = {}){
-      try{
-        const u = new URL(GAS_API_URL);
-        u.searchParams.set('reason', reason || '');
-        Object.entries(extraParams || {}).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && String(value) !== '') {
-            u.searchParams.set(key, String(value));
-          }
-        });
-        const url = u.toString();
-        console.log('[RADIO REQ]', url);
-
-        const r = await fetch(withGasApiToken_(url), { cache:'no-store' });
-        if(!r.ok) throw new Error('HTTP ' + r.status);
-
-        const j = await r.json();
-        console.log('[RADIO RES]', j);
-
-        console.log('[RADIO ITEMS]', (j.items||[]).map(x=>({type:x.type, speaker:x.speaker, key:x.key, text:(x.text||'').slice(0,20)})));
-
-        const items = (j && j.items) ? j.items : [];
-        if(!items.length) {
-          if (reason === 'clock_0740') {
-            console.log('[WEEKSTART EMPTY]', {
-              reason,
-              slot: j?.slot,
-              itemsLength: items.length,
-              skipReason: j?.debug?.skipReason
-            });
-          }
-          return { ok: !!j?.ok, played:false, itemsLength:0, slot:j?.slot, debug:j?.debug };
-        }
-
-        await playRadioQueue(items);
-        return { ok: !!j?.ok, played:true, itemsLength:items.length, slot:j?.slot, debug:j?.debug };
-
-      }catch(err){
-        console.error('[RADIO FAIL]', err);
-        return { ok:false, played:false, itemsLength:0, error:err };
-      }
-    }
+    async function requestRadioItems(reason, extraParams={}){const fallback=SignageBoundary.fixedRadioItems(reason);const pending=SignageBoundary.request(GAS_API_URL,{reason,...extraParams}).then(data=>({data}),error=>({error}));const first=fallback[0];try{if(first)await playRadioQueue([first]);const out=await pending;let items=out.data?.items||fallback;if(first&&items[0]?.key===first.key)items=items.slice(1);await playRadioQueue(items);return {ok:!!out.data,played:!!first||items.length>0,itemsLength:items.length+(first?1:0),privateAvailable:!!out.data,source:out.data?'private':'fixed'};}catch(_){return {ok:false,played:false,itemsLength:0,category:'playback'};}}
 
     // Radio entry point moved off the HOME button.
     // The playback implementation remains in requestRadioItems/playRadioQueue above,
@@ -1720,41 +1692,7 @@
       await requestRadioItems('clock_0720');
     }, true);
 
-    document.getElementById('ttsSpeakerTestBtn')?.addEventListener('pointerdown', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      try {
-        // しまお
-        const url1 =
-          GAS_API_URL +
-          '?speaker=' + encodeURIComponent('shimao') +
-          '&text=' + encodeURIComponent('しまおです。きょうのてんきをおしらせするで。');
-
-        const r1 = await fetch(withGasApiToken_(url1), { cache:'no-store' });
-        const j1 = await r1.json();
-        if (j1 && j1.ok && j1.audio) {
-          await playTtsBase64(j1.audio);
-          await wait(300);
-        }
-
-        // ぺんお
-        const url2 =
-          GAS_API_URL +
-          '?speaker=' + encodeURIComponent('peno') +
-          '&text=' + encodeURIComponent('ぺんおです。きょうのがっこうのよていをおしらせするで。');
-
-        const r2 = await fetch(withGasApiToken_(url2), { cache:'no-store' });
-        const j2 = await r2.json();
-        if (j2 && j2.ok && j2.audio) {
-          await playTtsBase64(j2.audio);
-        }
-
-      } catch (err) {
-        console.error('[SPEAKER TEST FAIL]', err);
-      }
-    }, true);
-
+    document.getElementById('ttsSpeakerTestBtn')?.addEventListener('pointerdown',(e)=>{e.preventDefault();e.stopPropagation();setToast?.('個別音声テストは利用できません。ラジオ再生を使ってください。');},true);
     // 使いやすいプリセット
     function sfxMenu(){      sfxTone(880, 35, 'square', 0.06); }      // ピッ
     function sfxCorrect(){   sfxTone(784, 60,'sine', 0.10); setTimeout(()=>sfxTone(1046, 80,'sine',0.12), 70); } // ポーン
