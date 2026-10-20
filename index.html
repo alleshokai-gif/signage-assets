@@ -1356,9 +1356,7 @@ function createLocalClock1830TestHandler_(button,output,requestRadioItems){
     event?.preventDefault?.();
     event?.stopPropagation?.();
     if(attempted)return null;
-    attempted=true;
-    button.disabled=true;
-    button.setAttribute('aria-busy','true');
+    let oneShotConsumed=false;
     output.hidden=false;
     output.textContent='夜の本編を再生します。音声が鳴ります。';
     try{
@@ -1370,23 +1368,31 @@ function createLocalClock1830TestHandler_(button,output,requestRadioItems){
         output.textContent='一回制御が使えないため再生しません。';
         return null;
       }
+      attempted=true;
+      button.disabled=true;
+      button.setAttribute('aria-busy','true');
       const result=await navigator.locks.request(lockName,{mode:'exclusive',ifAvailable:true},async lock=>{
         if(!lock){
+          attempted=false;
+          button.disabled=false;
           output.textContent='別の試験が実行中です。二重再生しません。';
           return null;
         }
         if(localStorage.getItem(usedKey)){
+          oneShotConsumed=true;
           output.textContent='この端末では一回再生済みです。';
           return null;
         }
         localStorage.setItem(usedKey,'started');
         if(localStorage.getItem(usedKey)!=='started')throw Error('one-shot marker did not persist');
+        oneShotConsumed=true;
         output.textContent='夜の本編を再生中です。音声が鳴ります。';
         return await requestRadioItems('clock_1830');
       });
       if(result)output.textContent=localClock1830TestResultText_(result);
       return result;
     }catch(_){
+      if(!oneShotConsumed){attempted=false;button.disabled=false;}
       output.textContent='一回再生を開始または完了できませんでした。詳細は表示しません。';
       return null;
     }finally{
