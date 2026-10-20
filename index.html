@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.20.0154"></script>
+  <script src="assets/version.js?v=2026.10.20.0156"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1075,14 +1075,42 @@
     async function playRadioQueue(items){ for(const it of items){ if(it.type==='wav'){ const base=(it.base==='clock')?CLOCK_VOICE_BASE:(it.base)?it.base:VOICE_BASE; await playWav(it.key,base);await wait(180);continue;} if(it.type==='tts'){let j;try{j=await SignageBoundary.request(GAS_API_URL,{action:'radioTts',reason:it.reason,queueId:it.queueId,index:it.index});}catch(err){console.warn('[private TTS unavailable]',{category:err?.category||'transport'});continue;} const d=j&&j.diagnostic;if(d&&d.buildMarker==='signage-inworld-canary-diag-20261019-a'){const ev=(v,a)=>a.includes(v)?v:null;const sn=v=>Number.isSafeInteger(v)&&v>=0?v:null;const rec={selectedProvider:ev(d.selectedProvider,['inworld','google']),provider:ev(d.provider,['inworld','google','none']),outcome:ev(d.outcome,['success','error']),resultCode:ev(d.resultCode,['inworld_success','google_fallback_success','google_failure']),fallback:ev(d.fallback,['none','stage_disabled','voice_unavailable','source_rejected','source_not_approved','config_invalid','text_tag_unsupported','request_limit','budget_limit','budget_unavailable','credential_invalid','transport_failed','http_failed','response_invalid','audio_missing','audio_invalid','provider_error']),speechCharacters:sn(d.speechCharacters),providerCharacters:sn(d.providerCharacters),inworldCharacters:sn(d.inworldCharacters),inworldMs:sn(d.inworldMs),googleMs:sn(d.googleMs),totalMs:sn(d.totalMs)};const old=Array.isArray(window.__signageRadioTtsDiagnostics)?window.__signageRadioTtsDiagnostics:[];window.__signageRadioTtsDiagnostics=[...old,rec].slice(-8);}if(j&&j.ok&&j.audio)await playTtsBase64(j.audio);else console.warn('[private TTS invalid response]');await wait(180);}}}
 
     /**
-   * 現行のRadio Items API呼び出し。
-   *
-   * GAS_API_URL に reason を付けて呼び出し、
-   * res.items を playRadioQueue(items) で再生する。
-   *
-   * items方式では WAV と TTS を混在して扱える。
+   * Authenticated private queue result with a fixed fallback.
+   * Diagnostics retain only radio reason/slot, outcome, counts, and source.
    */
-    async function requestRadioItems(reason, extraParams={}){const fallback=SignageBoundary.fixedRadioItems(reason);const pending=SignageBoundary.request(GAS_API_URL,{reason,...extraParams}).then(data=>({data}),error=>({error}));const first=fallback[0];try{if(first)await playRadioQueue([first]);const out=await pending;let items=out.data?.items||fallback;if(first&&items[0]?.key===first.key)items=items.slice(1);await playRadioQueue(items);return {ok:!!out.data,played:!!first||items.length>0,itemsLength:items.length+(first?1:0),privateAvailable:!!out.data,source:out.data?'private':'fixed'};}catch(_){return {ok:false,played:false,itemsLength:0,category:'playback'};}}
+function isRadioQueueItem_(item){
+  if(!item||typeof item!=='object'||Array.isArray(item)||Object.prototype.hasOwnProperty.call(item,'text'))return false;
+  if(item.type==='wav')return typeof item.key==='string'&&/^[A-Z0-9_]{1,64}$/.test(item.key)&&(item.base===undefined||item.base==='clock');
+  if(item.type==='tts')return typeof item.reason==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(item.reason)&&typeof item.queueId==='string'&&/^[A-Za-z0-9-]{1,64}$/.test(item.queueId)&&Number.isInteger(item.index)&&item.index>=0&&item.index<=32;
+  return false;
+}
+function radioQueueOutcome_(out){
+  if(out&&out.error){const e=out.error;if(e.code==='SIGNAGE_TRANSPORT_TIMEOUT')return'timeout';if(e.category==='parse')return'parse_failure';if(e.category==='http')return'http_failure';if(e.category==='transport')return'transport_failure';if(e.category==='configuration'||e.category==='storage')return'client_unavailable';return'request_failure';}
+  const data=out&&out.data;if(!data||typeof data!=='object'||Array.isArray(data))return'invalid_response';if(data.ok!==true)return'api_rejected';if(!Array.isArray(data.items)||!data.items.every(isRadioQueueItem_))return'queue_invalid';return data.items.length?'private_success':'private_empty';
+}
+function radioSafeSlot_(slot){return['night_prep','night_last','morning_short','morning_full','weekstart','alert'].includes(slot)?slot:'unknown';}
+function recordRadioQueueResult_(reason,result){
+  const allowed=['home','manual','boot','radio_test','clock_0655','clock_0720','clock_0740','clock_1830','clock_2100'];if(!allowed.includes(reason))return;
+  const record={reason,slot:radioSafeSlot_(result.slot),requestOutcome:result.requestOutcome,privateAvailable:result.privateAvailable,source:result.source,itemCount:result.itemCount,ttsItemCount:result.ttsItemCount,fallbackItemCount:result.fallbackItemCount,playbackErrorCategory:result.playbackErrorCategory};
+  try{const previous=Array.isArray(window.__signageRadioQueueDiagnostics)?window.__signageRadioQueueDiagnostics:[];window.__signageRadioQueueDiagnostics=[...previous,record].slice(-8);}catch(_){}
+  try{const sink=result.requestOutcome==='private_success'?console.info:console.warn;if(typeof sink==='function')sink.call(console,'[RADIO QUEUE]',record);}catch(_){}
+}
+async function requestRadioItems(reason,extraParams={}){
+  const fallback=SignageBoundary.fixedRadioItems(reason);
+  const pending=SignageBoundary.request(GAS_API_URL,{reason,...extraParams}).then(data=>({data}),error=>({error}));
+  const first=fallback[0];let firstAttempted=false,playbackFailed=false;
+  try{if(first){firstAttempted=true;await playRadioQueue([first]);}}catch(_){playbackFailed=true;}
+  const out=await pending,requestOutcome=radioQueueOutcome_(out),privateQueueAvailable=requestOutcome==='private_success';
+  const source=privateQueueAvailable?'private':'fixed',serverItems=privateQueueAvailable?out.data.items:fallback;
+  const items=Array.isArray(serverItems)?serverItems.slice():[];
+  if(first&&items[0]?.type==='wav'&&items[0]?.key===first.key)items.shift();
+  try{if(items.length)await playRadioQueue(items);}catch(_){playbackFailed=true;}
+  const result={ok:privateQueueAvailable&&!playbackFailed,played:firstAttempted||items.length>0,itemsLength:(firstAttempted?1:0)+items.length,
+    privateAvailable:privateQueueAvailable,source,requestOutcome,itemCount:privateQueueAvailable?out.data.items.length:0,
+    ttsItemCount:privateQueueAvailable?out.data.items.filter(item=>item.type==='tts').length:0,fallbackItemCount:fallback.length,
+    slot:privateQueueAvailable?out.data.slot:'unknown',playbackErrorCategory:playbackFailed?'playback':'none'};
+  recordRadioQueueResult_(reason,result);return result;
+}
 
     // Radio entry point moved off the HOME button.
     // The playback implementation remains in requestRadioItems/playRadioQueue above,
