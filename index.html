@@ -1127,7 +1127,7 @@ function isRadioQueueItem_(item){
   return false;
 }
 function radioQueueOutcome_(out){
-  if(out&&out.error){const e=out.error;if(e.code==='SIGNAGE_TRANSPORT_TIMEOUT')return'timeout';if(e.category==='parse')return'parse_failure';if(e.category==='http')return'http_failure';if(e.category==='transport')return'transport_failure';if(e.category==='configuration'||e.category==='storage')return'client_unavailable';return'request_failure';}
+  if(out&&out.error){const e=out.error;if(e.code==='SIGNAGE_TRANSPORT_TIMEOUT')return'timeout';if(e.category==='auth')return'authorization_rejected';if(e.category==='parse')return'parse_failure';if(e.category==='http')return'http_failure';if(e.category==='transport')return'transport_failure';if(e.category==='configuration'||e.category==='storage')return'client_unavailable';return'request_failure';}
   const data=out&&out.data;if(!data||typeof data!=='object'||Array.isArray(data))return'invalid_response';if(data.ok!==true)return'api_rejected';if(!Array.isArray(data.items)||!data.items.every(isRadioQueueItem_))return'queue_invalid';return data.items.length?'private_success':'private_empty';
 }
 function radioSafeSlot_(slot){return['night_prep','night_last','morning_short','morning_full','weekstart','alert'].includes(slot)?slot:'unknown';}
@@ -1147,7 +1147,7 @@ function radioQueueDiagnosticFallbackCount_(getFallbackItems){
   }catch(_){return 0;}
 }
 function radioQueueDiagnosticSummary_(data,getFallbackItems){
-  if(!data||data.ok!==true||data.type!=='radio'||data.reason!=='clock_1830'||data.slot!=='night_prep'||!Array.isArray(data.items)||!data.items.every(isRadioQueueItem_)){
+  if(!data||data.ok!==true||data.type!=='radio'||data.slot!=='night_prep'||!Array.isArray(data.items)||!data.items.every(isRadioQueueItem_)){
     return{requestOutcome:'invalid_response',source:'fallback (not played)',fixedIntroCount:radioQueueDiagnosticFallbackCount_(getFallbackItems),ttsReferenceCount:0,errorCategory:'invalid_response'};
   }
   const items=data.items;
@@ -1164,6 +1164,8 @@ function radioQueueDiagnosticError_(error,getFallbackItems){
   const base={source:'fallback (not played)',fixedIntroCount,ttsReferenceCount:0};
   if(error&&error.code==='SIGNAGE_TRANSPORT_TIMEOUT')
     return{requestOutcome:'timeout',...base,errorCategory:'timeout'};
+  if(error&&error.category==='auth')
+    return{requestOutcome:'denied',...base,errorCategory:'authorization_rejected'};
   if(error&&error.category==='application')
     return{requestOutcome:'denied',...base,errorCategory:'request_rejected'};
   if(error&&(error.category==='configuration'||error.category==='storage'))
@@ -1196,7 +1198,7 @@ function createRadioQueue1830DiagnosticHandler_(button,output,request,device,get
     output.textContent='取得中…';
     let summary;
     try{
-      const data=await request({action:'radioQueue',reason:'clock_1830',device});
+      const data=await request({reason:'clock_1830',device});
       summary=radioQueueDiagnosticSummary_(data,getFallbackItems);
     }catch(error){
       summary=radioQueueDiagnosticError_(error,getFallbackItems);
