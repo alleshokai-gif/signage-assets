@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.20.0156"></script>
+  <script src="assets/version.js?v=2026.10.20.2103"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -419,7 +419,29 @@
       color: #fff;
       pointer-events: none;
     }
-  </style>
+  
+.radioQueue1830Diagnostic{
+  position:fixed;top:68px;right:12px;z-index:180;
+  display:flex;flex-direction:column;gap:6px;
+  box-sizing:border-box;width:max-content;max-width:calc(100vw - 24px);
+  padding:7px;background:rgba(15,20,28,.88);color:#fff;
+  border:1px solid rgba(255,255,255,.24);border-radius:10px;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:auto;
+}
+.radioQueue1830Diagnostic[hidden]{display:none!important}
+.radioQueue1830Diagnostic button{
+  min-height:42px;max-width:100%;padding:8px 12px;border:0;border-radius:7px;
+  background:rgba(255,255,255,.14);color:#fff;font:600 14px/1.25 system-ui,sans-serif;
+  cursor:pointer;touch-action:manipulation;
+}
+.radioQueue1830Diagnostic button:disabled{opacity:.7;cursor:default}
+.radioQueue1830Diagnostic output{
+  display:block;max-width:min(390px,calc(100vw - 40px));font:11px/1.5 monospace;
+  white-space:pre-wrap;overflow-wrap:anywhere;color:#e8edf3;
+}
+.radioQueue1830Diagnostic output[hidden]{display:none!important}
+
+</style>
 </head>
 <body>
   <div id="topMask"></div>
@@ -447,6 +469,10 @@
   <!-- デバッグ -->
   <div id="toast">boot...</div>
   <button id="adminGearButton" class="adminGearButton" type="button" aria-label="管理メニュー" title="管理メニュー">⚙</button>
+  <section id="radioQueue1830Diagnostic" class="radioQueue1830Diagnostic" aria-label="無音キュー診断" hidden>
+    <button id="radioQueue1830DiagnosticButton" type="button">18:30取得確認（無音）</button>
+    <output id="radioQueue1830DiagnosticResult" aria-live="polite" hidden></output>
+  </section>
 
   <!-- メニュー（下部に重ね） -->
   <div id="menuWrap">
@@ -769,6 +795,21 @@
     const menuWrap   = document.getElementById('menuWrap');
     const menuHandle = document.getElementById('menuHandle');
     const adminGearButton = document.getElementById('adminGearButton');
+    const radioQueue1830DiagnosticPanel = document.getElementById('radioQueue1830Diagnostic');
+    const radioQueue1830DiagnosticButton = document.getElementById('radioQueue1830DiagnosticButton');
+    const radioQueue1830DiagnosticResult = document.getElementById('radioQueue1830DiagnosticResult');
+    if (radioQueue1830DiagnosticButton && radioQueue1830DiagnosticResult) {
+      radioQueue1830DiagnosticButton.addEventListener('pointerdown', event => event.stopPropagation());
+      radioQueue1830DiagnosticButton.addEventListener('click',
+        createRadioQueue1830DiagnosticHandler_(
+          radioQueue1830DiagnosticButton,
+          radioQueue1830DiagnosticResult,
+          parameters => SignageBoundary.request(GAS_API_URL, parameters),
+          ALERT_DEVICE_ID,
+          () => SignageBoundary.fixedRadioItems('clock_1830')
+        )
+      );
+    }
 
     const rtClock = document.getElementById('rtClock');
     const rtClockTapTarget = document.getElementById('rtClockTapTarget');
@@ -1011,6 +1052,7 @@
       }
 
       updateAdminGearVisibility(page);
+      updateRadioQueue1830DiagnosticVisibility_(page);
     }
 
     function resolveBase_(base){
@@ -1089,6 +1131,81 @@ function radioQueueOutcome_(out){
   const data=out&&out.data;if(!data||typeof data!=='object'||Array.isArray(data))return'invalid_response';if(data.ok!==true)return'api_rejected';if(!Array.isArray(data.items)||!data.items.every(isRadioQueueItem_))return'queue_invalid';return data.items.length?'private_success':'private_empty';
 }
 function radioSafeSlot_(slot){return['night_prep','night_last','morning_short','morning_full','weekstart','alert'].includes(slot)?slot:'unknown';}
+
+    function updateRadioQueue1830DiagnosticVisibility_(page) {
+      if (!radioQueue1830DiagnosticPanel) return;
+      const show = page === 'home';
+      radioQueue1830DiagnosticPanel.hidden = !show;
+      radioQueue1830DiagnosticPanel.setAttribute('aria-hidden', show ? 'false' : 'true');
+    }
+/* Queue-only diagnostic: never invokes fallback playback or TTS rendering. */
+function radioQueueDiagnosticFallbackCount_(getFallbackItems){
+  try{
+    const items=typeof getFallbackItems==='function'?getFallbackItems():[];
+    if(!Array.isArray(items))return 0;
+    return items.filter(item=>item&&item.type==='wav'&&typeof item.key==='string'&&/^[A-Z0-9_]{1,64}$/.test(item.key)).length;
+  }catch(_){return 0;}
+}
+function radioQueueDiagnosticSummary_(data,getFallbackItems){
+  if(!data||data.ok!==true||data.type!=='radio'||data.reason!=='clock_1830'||data.slot!=='night_prep'||!Array.isArray(data.items)||!data.items.every(isRadioQueueItem_)){
+    return{requestOutcome:'invalid_response',source:'fallback (not played)',fixedIntroCount:radioQueueDiagnosticFallbackCount_(getFallbackItems),ttsReferenceCount:0,errorCategory:'invalid_response'};
+  }
+  const items=data.items;
+  return{
+    requestOutcome:items.length?'success':'success_empty',
+    source:'private',
+    fixedIntroCount:items.filter(item=>item.type==='wav').length,
+    ttsReferenceCount:items.filter(item=>item.type==='tts').length,
+    errorCategory:'none'
+  };
+}
+function radioQueueDiagnosticError_(error,getFallbackItems){
+  const fixedIntroCount=radioQueueDiagnosticFallbackCount_(getFallbackItems);
+  const base={source:'fallback (not played)',fixedIntroCount,ttsReferenceCount:0};
+  if(error&&error.code==='SIGNAGE_TRANSPORT_TIMEOUT')
+    return{requestOutcome:'timeout',...base,errorCategory:'timeout'};
+  if(error&&error.category==='application')
+    return{requestOutcome:'denied',...base,errorCategory:'request_rejected'};
+  if(error&&(error.category==='configuration'||error.category==='storage'))
+    return{requestOutcome:'error',...base,errorCategory:'configuration'};
+  if(error&&error.category==='parse')
+    return{requestOutcome:'error',...base,errorCategory:'invalid_response'};
+  if(error&&(error.category==='transport'||error.category==='http'))
+    return{requestOutcome:'error',...base,errorCategory:'transport'};
+  return{requestOutcome:'error',...base,errorCategory:'request_failure'};
+}
+function formatRadioQueueDiagnosticSummary_(summary){
+  return[
+    'request: '+summary.requestOutcome,
+    'private/fallback: '+summary.source,
+    '固定intro数: '+summary.fixedIntroCount,
+    'TTS参照数: '+summary.ttsReferenceCount,
+    'error: '+summary.errorCategory
+  ].join(' / ');
+}
+function createRadioQueue1830DiagnosticHandler_(button,output,request,device,getFallbackItems){
+  let attempted=false;
+  return async function(event){
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if(attempted)return null;
+    attempted=true;
+    button.disabled=true;
+    button.setAttribute('aria-busy','true');
+    output.hidden=false;
+    output.textContent='取得中…';
+    let summary;
+    try{
+      const data=await request({action:'radioQueue',reason:'clock_1830',device});
+      summary=radioQueueDiagnosticSummary_(data,getFallbackItems);
+    }catch(error){
+      summary=radioQueueDiagnosticError_(error,getFallbackItems);
+    }
+    output.textContent=formatRadioQueueDiagnosticSummary_(summary);
+    button.setAttribute('aria-busy','false');
+    return summary;
+  };
+}
 function recordRadioQueueResult_(reason,result){
   const allowed=['home','manual','boot','radio_test','clock_0655','clock_0720','clock_0740','clock_1830','clock_2100'];if(!allowed.includes(reason))return;
   const record={reason,slot:radioSafeSlot_(result.slot),requestOutcome:result.requestOutcome,privateAvailable:result.privateAvailable,source:result.source,itemCount:result.itemCount,ttsItemCount:result.ttsItemCount,fallbackItemCount:result.fallbackItemCount,playbackErrorCategory:result.playbackErrorCategory};
@@ -1747,4 +1864,5 @@ async function requestRadioItems(reason,extraParams={}){
 </script>
 </body>
 </html>
+
 
