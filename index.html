@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.22.0737"></script>
+  <script src="assets/version.js?v=2026.10.22.0742"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1254,7 +1254,7 @@ async function playTtsBase64(base64,onEvent){
       finally{if(context)try{await context.close();}catch(_){}}
     }
 
-    async function playRadioQueue(items,diagContext){
+    async function playRadioQueue(items,diagContext,onPlaybackStart){
   const counts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
   // Start authenticated MP3 reads while fixed WAVs are playing. Each promise
   // settles to a value so an early network failure cannot reject unobserved.
@@ -1270,7 +1270,7 @@ async function playTtsBase64(base64,onEvent){
     const it=items[itemPosition];
     const index=Number.isSafeInteger(it&&it.index)?it.index:itemPosition;
     const itemStarted=radioDiagNow_();
-    const onEvent=event=>{const kind=event==='ended'?'play-ended':event==='error'?'play-error':event;radioDiagEvent_(diagContext,{index,type:it.type,event:kind,elapsedMs:radioDiagElapsed_(itemStarted)});};
+    const onEvent=event=>{if(event==='play-start')try{onPlaybackStart?.();}catch(_){}const kind=event==='ended'?'play-ended':event==='error'?'play-error':event;radioDiagEvent_(diagContext,{index,type:it.type,event:kind,elapsedMs:radioDiagElapsed_(itemStarted)});};
     if(it.type==='wav'){
       const base=(it.base==='clock')?CLOCK_VOICE_BASE:(it.base)?it.base:VOICE_BASE;
       if(await playWav(it.key,base,onEvent)==='ended')counts.wavComplete++;
@@ -1461,7 +1461,7 @@ function recordRadioQueueResult_(reason,result,diagContext){
   }catch(_){}
   radioDiagRenderRecord_(record);
 }
-async function requestRadioItems(reason,extraParams={}){
+async function requestRadioItems(reason,extraParams={},onPlaybackStart){
  const fallback=SignageBoundary.fixedRadioItems(reason),diagContext={requestId:radioDiagRequestId_(),reason:RADIO_DIAG_ALLOWED_REASONS_.includes(reason)?reason:"unknown",startedAt:radioDiagNow_(),startedAtEpochMs:Date.now(),events:[],observerTimedOut:false,finished:false,requestOutcome:"pending",source:"unknown",slot:"unknown",itemCount:0,ttsItemCount:0,fallbackItemCount:fallback.length,queueRequestDurationMs:0,queueErrorCategory:"none",authErrorCategory:"none",playbackErrorCategory:"none",expectedItemCount:0};
  const queueStartedAt=diagContext.startedAt;radioDiagSnapshot_(diagContext,"started");
  const observerTimeoutId=setTimeout(()=>{if(!diagContext.finished){diagContext.observerTimedOut=true;radioDiagSnapshot_(diagContext,"timeout");}},300000);
@@ -1474,7 +1474,7 @@ async function requestRadioItems(reason,extraParams={}){
 
   if(first){
     firstAttempted=true;
-    Object.assign(fallbackCounts,await playRadioQueue([first],diagContext));radioDiagSnapshot_(diagContext,diagContext.observerTimedOut?"timeout":"playing");
+    Object.assign(fallbackCounts,await playRadioQueue([first],diagContext,onPlaybackStart));radioDiagSnapshot_(diagContext,diagContext.observerTimedOut?"timeout":"playing");
   }
   const out=await pending;
   const requestOutcome=radioQueueOutcome_(out);
@@ -1490,7 +1490,7 @@ async function requestRadioItems(reason,extraParams={}){
  diagContext.queueErrorCategory=radioQueueErrorClass_(out);diagContext.authErrorCategory=diagContext.queueErrorCategory==="auth"?"auth":"none";diagContext.expectedItemCount=expectedItemCount;
  radioDiagSnapshot_(diagContext,"queue_received");
 
-  const remainingCounts=items.length?await playRadioQueue(items,diagContext):{wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
+  const remainingCounts=items.length?await playRadioQueue(items,diagContext,onPlaybackStart):{wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
   const remainingGroup=privateQueueAvailable?privateCounts:fallbackCounts;
   remainingGroup.wavComplete+=remainingCounts.wavComplete;
   remainingGroup.wavFailed+=remainingCounts.wavFailed;
@@ -2055,6 +2055,7 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
 
     let __clockInFlight = false;
     let __lastLoggedHM = '';
+    let __lastStartedKey = '';
 
     async function tickClockVoice(){
       const now = new Date();
@@ -2094,6 +2095,7 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
       const isWeekstart0740 = reason === 'clock_0740';
 
       if (__clockInFlight) return;
+      if (__lastStartedKey === key) return;
       const previousAttempt = Number(localStorage.getItem(attemptKey) || 0);
       if (previousAttempt > 0 && Date.now() - previousAttempt < 15000) return;
 
@@ -2125,11 +2127,16 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
         const playOnce = async () => {
           // Another tab may have finished while this tab waited for the lock.
           if (localStorage.getItem(key) || (isWeekstart0740 && localStorage.getItem(playedKey))) return;
-          const radioResult = await requestRadioItems(reason);
-          if (radioResult?.startedItemCount > 0) {
+          const markStarted = () => {
+            if (__lastStartedKey === key) return;
+            __lastStartedKey = key;
             localStorage.setItem(key, '1');
             localStorage.setItem('CLOCK_LAST_FIRE_MS', String(Date.now()));
             if (isWeekstart0740) localStorage.setItem(playedKey, String(Date.now()));
+          };
+          const radioResult = await requestRadioItems(reason, {}, markStarted);
+          if (radioResult?.startedItemCount > 0) {
+            markStarted();
           } else {
             console.warn('[clock radio not started]', {reason,
               requestOutcome:radioResult?.requestOutcome || 'unknown',

@@ -25,11 +25,11 @@ function makeClock(responses) {
       getItem: key => values.get(key) || null,
       setItem: (key, value) => values.set(key, String(value))
     },
-    requestRadioItems: async reason => {
+    requestRadioItems: async (reason, _params, onStart) => {
       calls.push(reason);
       const result = responses.shift();
       if (result instanceof Error) throw result;
-      return result;
+      return typeof result === 'function' ? result(onStart) : result;
     },
     requestCastIfNeeded_: () => {},
     console: {log() {}, warn() {}}
@@ -75,6 +75,20 @@ test('five-second clock ticks do not overlap an active broadcast', async () => {
   release({requestOutcome: 'private_success', source: 'private', startedItemCount: 7});
   await first;
   assert.equal(clock.values.get('clockSpoke_2026-10-22_07:20'), '1');
+});
+
+test('played marker is written on audio start before the queue finishes', async () => {
+  let release;
+  const clock = makeClock([onStart => {
+    onStart();
+    return new Promise(resolve => { release = resolve; });
+  }]);
+  const active = clock.tick();
+  assert.equal(clock.values.get('clockSpoke_2026-10-22_07:20'), '1');
+  await clock.tick();
+  assert.equal(clock.calls.length, 1);
+  release({requestOutcome: 'private_success', source: 'private', startedItemCount: 7});
+  await active;
 });
 
 test('an exception before playback leaves the slot retryable', async () => {
