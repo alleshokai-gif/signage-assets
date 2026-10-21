@@ -18,7 +18,7 @@ for(const relative of ['../index.html','../wi59-canary/index.html']) {
       SignageBoundary:{request:async(_url,p)=>{requested++;return {ok:true,audio:p.index===1?'valid':'invalid'};}},
       playWav:async key=>{assert.equal(requested,1);played.push(key);return 'ended';},
       playTtsBase64:async value=>{played.push(value);return value==='valid'?'ended':'error';},
-      playStoredMp3Base64:async value=>{played.push(value);return value==='valid';},
+      playStoredMp3Base64:async value=>{played.push(value);return value==='valid'?'ended':'decode-error';},
       playRadioUnavailableCue_:async()=>{played.push('cue');return true;},
       wait:async()=>{},radioDiagNow_:()=>0,radioDiagElapsed_:()=>1,
       radioDiagEvent_:(_context,event)=>events.push(event.event),

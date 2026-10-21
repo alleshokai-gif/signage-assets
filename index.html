@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.22.0742"></script>
+  <script src="assets/version.js?v=2026.10.22.0839"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1103,12 +1103,12 @@ const RADIO_DIAG_STORAGE_KEY_="signage_radio_diagnostics_v1",RADIO_DIAG_RING_LIM
 function radioDiagRequestId_(){return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);}
 function radioDiagStoredEvent_(e){
  if(!e||typeof e!=="object"||Array.isArray(e))return null;
- const allow=["tts-request-start","tts-request-success","tts-request-error","audio-request-start","audio-request-success","audio-request-error","audio-missing","fallback-cue","play-start","play-ended","play-error","play-rejected","play-threw"],type=e.type==="wav"?"wav":e.type==="tts"?"tts":e.type==="mp3"?"mp3":null;
+ const allow=["tts-request-start","tts-request-success","tts-request-error","audio-request-start","audio-request-success","audio-request-error","audio-missing","fallback-cue","decode-ready","decode-error","format-error","play-start","play-ended","play-error","play-rejected","play-threw"],type=e.type==="wav"?"wav":e.type==="tts"?"tts":e.type==="mp3"?"mp3":null;
  if(!type||!allow.includes(e.event))return null;
  const r={index:Number.isSafeInteger(e.index)&&e.index>=0&&e.index<=32?e.index:null,type,event:e.event,atMs:Number.isSafeInteger(e.atMs)&&e.atMs>=0&&e.atMs<=86400000?e.atMs:0};
  if(Number.isSafeInteger(e.elapsedMs)&&e.elapsedMs>=0&&e.elapsedMs<=86400000)r.elapsedMs=e.elapsedMs;
  for(const k of ["cacheReferenceOutcome","selectedProvider","provider","fallbackOutcome","errorClass"]){
-  const v={cacheReferenceOutcome:["resolved","failed","unknown"],selectedProvider:["inworld","google","unknown"],provider:["inworld","google","unknown"],fallbackOutcome:["not-used","succeeded","failed","unknown"],errorClass:["none","auth","cache-reference","rate-limited","timeout","server","http","network","request"]};
+  const v={cacheReferenceOutcome:["resolved","failed","unknown"],selectedProvider:["inworld","google","unknown"],provider:["inworld","google","unknown"],fallbackOutcome:["not-used","succeeded","failed","unknown"],errorClass:["none","auth","cache-reference","rate-limited","timeout","server","http","network","request","format","decode","policy","playback"]};
   if(v[k].includes(e[k]))r[k]=e[k];
  }
  return r;
@@ -1148,14 +1148,14 @@ function radioDiagSnapshot_(c,stage){
  return radioDiagPersist_({requestId:c.requestId,reason:c.reason,stage:c.observerTimedOut?"timeout":stage,startedAtMs:c.startedAtEpochMs,updatedAtMs:Date.now(),observerTimedOut:c.observerTimedOut===true,
   requestOutcome:c.requestOutcome||"pending",source:c.source||"unknown",slot:c.slot||"unknown",itemCount:c.itemCount||0,ttsItemCount:c.ttsItemCount||0,fallbackItemCount:c.fallbackItemCount||0,
   queueRequestDurationMs:c.requestOutcome==="pending"?radioDiagElapsed_(c.startedAt):c.queueRequestDurationMs,queueErrorCategory:c.queueErrorCategory||"none",authErrorCategory:c.authErrorCategory||"none",playbackErrorCategory:c.playbackErrorCategory||"none",
-  expectedItemCount:c.expectedItemCount||0,startedItemCount:n("play-start"),completedItemCount:n("play-ended"),failedItemCount:["play-error","play-rejected","play-threw","tts-request-error","audio-request-error","audio-missing"].reduce((a,k)=>a+n(k),0),
+  expectedItemCount:c.expectedItemCount||0,startedItemCount:n("play-start"),completedItemCount:n("play-ended"),failedItemCount:["format-error","decode-error","play-error","play-rejected","play-threw","tts-request-error","audio-request-error","audio-missing"].reduce((a,k)=>a+n(k),0),
   cacheReferenceResolvedCount:resolved,cacheReferenceFailedCount:failed,cacheReferenceUnknownCount:Math.max(0,tts-resolved-failed),providerFallbackSuccessCount:e.filter(x=>x&&x.fallbackOutcome==="succeeded").length,playbackEvents:e});
 }
 function radioDiagRestore_(){const a=radioDiagLoadRing_();try{window.__signageRadioQueueDiagnostics=a;}catch(_){}if(a.length)radioDiagRenderRecord_(a[a.length-1]);}
 radioDiagRestore_();
 function radioDiagEvent_(context,event){
   if(!context||!Array.isArray(context.events))return;
-   const allowedEvents=['tts-request-start','tts-request-success','tts-request-error','audio-request-start','audio-request-success','audio-request-error','audio-missing','fallback-cue','play-start','play-ended','play-error','play-rejected','play-threw'];
+   const allowedEvents=['tts-request-start','tts-request-success','tts-request-error','audio-request-start','audio-request-success','audio-request-error','audio-missing','fallback-cue','decode-ready','decode-error','format-error','play-start','play-ended','play-error','play-rejected','play-threw'];
   if(!allowedEvents.includes(event.event))return;
   const index=Number.isSafeInteger(event.index)&&event.index>=0&&event.index<=32?event.index:null;
    const type=event.type==='wav'?'wav':event.type==='tts'?'tts':event.type==='mp3'?'mp3':null;
@@ -1166,7 +1166,7 @@ function radioDiagEvent_(context,event){
   if(['inworld','google','unknown'].includes(event.selectedProvider))record.selectedProvider=event.selectedProvider;
   if(['inworld','google','unknown'].includes(event.provider))record.provider=event.provider;
   if(['not-used','succeeded','failed','unknown'].includes(event.fallbackOutcome))record.fallbackOutcome=event.fallbackOutcome;
-  if(['none','auth','cache-reference','rate-limited','timeout','server','http','network','request'].includes(event.errorClass))record.errorClass=event.errorClass;
+  if(['none','auth','cache-reference','rate-limited','timeout','server','http','network','request','format','decode','policy','playback'].includes(event.errorClass))record.errorClass=event.errorClass;
   context.events.push(record);if(context.events.length>64)context.events.shift();radioDiagSnapshot_(context,context.observerTimedOut?"timeout":"playing");
   try{if(typeof console.info==='function')console.info('[signage-radio-event]',record);}catch(_){}
 }
@@ -1203,6 +1203,59 @@ async function playTtsBase64(base64,onEvent){
         }catch(_){
           finish('play-threw');
         }
+      });
+    }
+    // Stored private MP3s arrive as base64 inside the authenticated response.
+    // Convert in bounded chunks and give the media element a short Blob URL;
+    // long data URLs are unreliable in some embedded Android browsers.
+    async function playStoredMp3Base64(base64,onEvent){
+      const notify=(event,errorClass)=>{try{onEvent?.(event,errorClass);}catch(_){}};
+      let objectUrl;
+      try {
+        if(typeof base64!=='string'||!base64||base64.length>11000000||base64.length%4!==0)throw new Error('format');
+        const chunks=[];
+        for(let i=0;i<base64.length;i+=32768){
+          const decoded=atob(base64.slice(i,i+32768));
+          const bytes=new Uint8Array(decoded.length);
+          for(let j=0;j<decoded.length;j++)bytes[j]=decoded.charCodeAt(j);
+          chunks.push(bytes);
+        }
+        const blob=new Blob(chunks,{type:'audio/mpeg'});
+        if(blob.size<64||blob.size>8000000)throw new Error('format');
+        objectUrl=URL.createObjectURL(blob);
+      }catch(_){
+        notify('format-error','format');
+        return 'format-error';
+      }
+      let audio;
+      try{audio=new Audio();}
+      catch(_){URL.revokeObjectURL(objectUrl);notify('play-threw','playback');return 'play-threw';}
+      audio.preload='auto';
+      audio.volume=1;
+      return new Promise(resolve=>{
+        let settled=false,started=false,ready=false;
+        const finish=(event,errorClass)=>{
+          if(settled)return;
+          settled=true;
+          notify(event,errorClass);
+          audio.onplay=audio.onloadeddata=audio.onended=audio.onerror=null;
+          try{audio.pause();audio.removeAttribute('src');audio.load();}catch(_){}
+          URL.revokeObjectURL(objectUrl);
+          resolve(event);
+        };
+        audio.onloadeddata=()=>{if(!ready){ready=true;notify('decode-ready');}};
+        audio.onplay=()=>{if(!started){started=true;notify('play-start');}};
+        audio.onended=()=>finish('ended');
+        audio.onerror=()=>{
+          const code=audio.error?.code;
+          const category=code===3?'decode':code===4?'format':'playback';
+          finish(started?'play-error':category==='format'?'format-error':category==='decode'?'decode-error':'play-error',category);
+        };
+        try{
+          audio.src=objectUrl;
+          const result=audio.play();
+          if(result&&typeof result.catch==='function')result.catch(error=>finish('play-rejected',error?.name==='NotAllowedError'?'policy':'playback'));
+        }catch(_){finish('play-threw','playback');}
       });
     }
     async function ttsTest(){ setToast?.('個別音声テストは利用できません。ラジオ再生を使ってください。'); }
@@ -1256,21 +1309,25 @@ async function playTtsBase64(base64,onEvent){
 
     async function playRadioQueue(items,diagContext,onPlaybackStart){
   const counts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
-  // Start authenticated MP3 reads while fixed WAVs are playing. Each promise
-  // settles to a value so an early network failure cannot reject unobserved.
+  // Keep at most the current and next MP3 response in memory. Start the first
+  // read during the opening WAV, then fetch each successor while one plays.
   const prefetched=new Map();
-  for(const item of items)if(item?.type==='mp3'){
-    const key=item.queueId+':'+item.index;
+  const mp3Items=items.filter(item=>item?.type==='mp3');
+  let nextMp3=0;
+  const prefetchNext=()=>{
+    if(nextMp3>=mp3Items.length)return;
+    const item=mp3Items[nextMp3++],key=item.queueId+':'+item.index;
     if(!prefetched.has(key))prefetched.set(key,
       SignageBoundary.request(GAS_API_URL,
         {action:'radioAudio',reason:item.reason,queueId:item.queueId,index:item.index})
         .then(data=>({data}),error=>({error})));
-  }
+  };
+  prefetchNext();
   for(let itemPosition=0;itemPosition<items.length;itemPosition++){
     const it=items[itemPosition];
     const index=Number.isSafeInteger(it&&it.index)?it.index:itemPosition;
     const itemStarted=radioDiagNow_();
-    const onEvent=event=>{if(event==='play-start')try{onPlaybackStart?.();}catch(_){}const kind=event==='ended'?'play-ended':event==='error'?'play-error':event;radioDiagEvent_(diagContext,{index,type:it.type,event:kind,elapsedMs:radioDiagElapsed_(itemStarted)});};
+    const onEvent=(event,errorClass)=>{if(event==='play-start')try{onPlaybackStart?.();}catch(_){}const kind=event==='ended'?'play-ended':event==='error'?'play-error':event;radioDiagEvent_(diagContext,{index,type:it.type,event:kind,elapsedMs:radioDiagElapsed_(itemStarted),errorClass});};
     if(it.type==='wav'){
       const base=(it.base==='clock')?CLOCK_VOICE_BASE:(it.base)?it.base:VOICE_BASE;
       if(await playWav(it.key,base,onEvent)==='ended')counts.wavComplete++;
@@ -1289,7 +1346,10 @@ async function playTtsBase64(base64,onEvent){
       radioDiagEvent_(diagContext,{index,type:'mp3',event:'audio-request-start'});
       let audio;
       try{
-        const fetched=await prefetched.get(it.queueId+':'+it.index);
+        const key=it.queueId+':'+it.index;
+        const fetched=await prefetched.get(key);
+        prefetched.delete(key);
+        prefetchNext();
         if(fetched.error)throw fetched.error;
         audio=fetched.data;
       }catch(err){
@@ -1308,7 +1368,7 @@ async function playTtsBase64(base64,onEvent){
       }
       radioDiagEvent_(diagContext,{index,type:'mp3',event:'audio-request-success',
         elapsedMs:radioDiagElapsed_(requestStarted)});
-      if(await playTtsBase64(audio.audio,onEvent)==='ended')counts.ttsComplete++;
+      if(await playStoredMp3Base64(audio.audio,onEvent)==='ended')counts.ttsComplete++;
       else{
         counts.ttsFailed++;
         if(await playRadioUnavailableCue_())radioDiagEvent_(diagContext,{index,type:'mp3',event:'fallback-cue'});
@@ -1461,7 +1521,11 @@ function recordRadioQueueResult_(reason,result,diagContext){
   }catch(_){}
   radioDiagRenderRecord_(record);
 }
+let __radioPlaybackActive=false;
 async function requestRadioItems(reason,extraParams={},onPlaybackStart){
+ if(__radioPlaybackActive)return {ok:false,played:false,requestOutcome:'playback_busy',source:'unknown',startedItemCount:0};
+ __radioPlaybackActive=true;
+ try {
  const fallback=SignageBoundary.fixedRadioItems(reason),diagContext={requestId:radioDiagRequestId_(),reason:RADIO_DIAG_ALLOWED_REASONS_.includes(reason)?reason:"unknown",startedAt:radioDiagNow_(),startedAtEpochMs:Date.now(),events:[],observerTimedOut:false,finished:false,requestOutcome:"pending",source:"unknown",slot:"unknown",itemCount:0,ttsItemCount:0,fallbackItemCount:fallback.length,queueRequestDurationMs:0,queueErrorCategory:"none",authErrorCategory:"none",playbackErrorCategory:"none",expectedItemCount:0};
  const queueStartedAt=diagContext.startedAt;radioDiagSnapshot_(diagContext,"started");
  const observerTimeoutId=setTimeout(()=>{if(!diagContext.finished){diagContext.observerTimedOut=true;radioDiagSnapshot_(diagContext,"timeout");}},300000);
@@ -1500,7 +1564,7 @@ async function requestRadioItems(reason,extraParams={},onPlaybackStart){
   diagContext.expectedItemCount=expectedItemCount;
   const startedItemCount=diagContext.events.filter(e=>e.event==='play-start').length;
   const completedItemCount=diagContext.events.filter(e=>e.event==='play-ended').length;
-  const failedItemCount=diagContext.events.filter(e=>['play-error','play-rejected','play-threw','tts-request-error','audio-request-error','audio-missing'].includes(e.event)).length;
+  const failedItemCount=diagContext.events.filter(e=>['format-error','decode-error','play-error','play-rejected','play-threw','tts-request-error','audio-request-error','audio-missing'].includes(e.event)).length;
   const cacheReferenceResolvedCount=diagContext.events.filter(e=>e.cacheReferenceOutcome==='resolved').length;
   const cacheReferenceFailedCount=diagContext.events.filter(e=>e.cacheReferenceOutcome==='failed').length;
   const cacheReferenceUnknownCount=diagContext.events.filter(e=>(e.event==='tts-request-success'||e.event==='tts-request-error')&&e.cacheReferenceOutcome==='unknown').length;
@@ -1531,6 +1595,7 @@ async function requestRadioItems(reason,extraParams={},onPlaybackStart){
   };
   diagContext.finished=true;clearTimeout(observerTimeoutId);recordRadioQueueResult_(reason,result,diagContext);
   return result;
+ } finally { __radioPlaybackActive=false; }
 }
 
 function localClock1830TestResultText_(result){
