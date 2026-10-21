@@ -65,6 +65,18 @@ test('any started audio prevents duplicate automatic playback', async () => {
   assert.equal(clock.values.get('clockSpoke_2026-10-22_07:20'), '1');
 });
 
+test('five-second clock ticks do not overlap an active broadcast', async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const clock = makeClock([pending]);
+  const first = clock.tick();
+  await clock.tick();
+  assert.equal(clock.calls.length, 1);
+  release({requestOutcome: 'private_success', source: 'private', startedItemCount: 7});
+  await first;
+  assert.equal(clock.values.get('clockSpoke_2026-10-22_07:20'), '1');
+});
+
 test('an exception before playback leaves the slot retryable', async () => {
   const clock = makeClock([new Error('network'), {requestOutcome: 'private_success', source: 'private', startedItemCount: 7}]);
   await clock.tick();
