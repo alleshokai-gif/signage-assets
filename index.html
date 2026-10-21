@@ -1352,7 +1352,8 @@ async function requestRadioItems(reason,extraParams={}){
   const diagContext={startedAt:radioDiagNow_(),events:[]};
   const queueStartedAt=diagContext.startedAt;
   const fallback=SignageBoundary.fixedRadioItems(reason);
-  const pending=SignageBoundary.request(GAS_API_URL,{reason,...extraParams}).then(data=>({data}),error=>({error}));
+  let queueRequestDurationMs=0;
+  const pending=SignageBoundary.request(GAS_API_URL,{reason,...extraParams}).then(data=>{queueRequestDurationMs=radioDiagElapsed_(queueStartedAt);return {data};},error=>{queueRequestDurationMs=radioDiagElapsed_(queueStartedAt);return {error};});
   const first=fallback[0];
   let firstAttempted=false;
   const fallbackCounts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
@@ -1363,7 +1364,6 @@ async function requestRadioItems(reason,extraParams={}){
     Object.assign(fallbackCounts,await playRadioQueue([first],diagContext));
   }
   const out=await pending;
-  const queueRequestDurationMs=radioDiagElapsed_(queueStartedAt);
   const requestOutcome=radioQueueOutcome_(out);
   const privateQueueAvailable=requestOutcome==='private_success';
   const source=privateQueueAvailable?'private':'fixed fallback';
