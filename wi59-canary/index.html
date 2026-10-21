@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.20.0156"></script>
+  <script src="assets/version.js?v=2026.10.21.1304"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1065,7 +1065,20 @@
       });
     }
 
+    function playStoredMp3Base64(base64){
+      return new Promise(resolve=>{
+        const audio=new Audio('data:audio/mpeg;base64,'+base64);
+        let done=false;
+        const finish=ok=>{if(done)return;done=true;clearTimeout(timer);resolve(ok);};
+        const timer=setTimeout(()=>{audio.pause();finish(false);},120000);
+        audio.onended=()=>finish(true);
+        audio.onerror=()=>finish(false);
+        audio.play().catch(()=>finish(false));
+      });
+    }
+
     async function playRadioQueue(items){
+      let missingAudio=0;
       for(const it of items){
 
 
@@ -1077,6 +1090,25 @@
             VOICE_BASE;
 
           await playWav(it.key, base);
+          await wait(180);
+          continue;
+        }
+
+        if(it.type==='missing_audio'){
+          missingAudio++;
+          console.warn('[radio audio unavailable]',{category:'preparation'});
+          continue;
+        }
+        if(it.type==='mp3'){
+          try{
+            const audio=await SignageBoundary.request(GAS_API_URL,
+              {action:'radioAudio',reason:it.reason,queueId:it.queueId,index:it.index});
+            if(!audio?.ok||!audio.audio||!(await playStoredMp3Base64(audio.audio)))
+              throw new Error('audio_unavailable');
+          }catch(_){
+            missingAudio++;
+            console.warn('[radio audio unavailable]',{category:'delivery'});
+          }
           await wait(180);
           continue;
         }
@@ -1149,6 +1181,7 @@
           continue;
         }
       }
+      return {missingAudio};
     }
 
     /**
@@ -1158,7 +1191,8 @@
 function isRadioQueueItem_(item){
   if(!item||typeof item!=='object'||Array.isArray(item)||Object.prototype.hasOwnProperty.call(item,'text'))return false;
   if(item.type==='wav')return typeof item.key==='string'&&/^[A-Z0-9_]{1,64}$/.test(item.key)&&(item.base===undefined||item.base==='clock');
-  if(item.type==='tts')return typeof item.reason==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(item.reason)&&typeof item.queueId==='string'&&/^[A-Za-z0-9-]{1,64}$/.test(item.queueId)&&Number.isInteger(item.index)&&item.index>=0&&item.index<=32;
+  if(item.type==='tts'||item.type==='mp3')return typeof item.reason==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(item.reason)&&typeof item.queueId==='string'&&/^[A-Za-z0-9-]{1,64}$/.test(item.queueId)&&Number.isInteger(item.index)&&item.index>=0&&item.index<=32;
+  if(item.type==='missing_audio')return Object.keys(item).length===1;
   return false;
 }
 function radioQueueOutcome_(out){
@@ -1181,10 +1215,10 @@ async function requestRadioItems(reason,extraParams={}){
   const source=privateQueueAvailable?'private':'fixed',serverItems=privateQueueAvailable?out.data.items:fallback;
   const items=Array.isArray(serverItems)?serverItems.slice():[];
   if(first&&items[0]?.type==='wav'&&items[0]?.key===first.key)items.shift();
-  try{if(items.length)await playRadioQueue(items);}catch(_){playbackFailed=true;}
+  try{if(items.length){const playback=await playRadioQueue(items);if(playback.missingAudio)playbackFailed=true;}}catch(_){playbackFailed=true;}
   const result={ok:privateQueueAvailable&&!playbackFailed,played:firstAttempted||items.length>0,itemsLength:(firstAttempted?1:0)+items.length,
     privateAvailable:privateQueueAvailable,source,requestOutcome,itemCount:privateQueueAvailable?out.data.items.length:0,
-    ttsItemCount:privateQueueAvailable?out.data.items.filter(item=>item.type==='tts').length:0,fallbackItemCount:fallback.length,
+    ttsItemCount:privateQueueAvailable?out.data.items.filter(item=>['tts','mp3','missing_audio'].includes(item.type)).length:0,fallbackItemCount:fallback.length,
     slot:privateQueueAvailable?out.data.slot:'unknown',playbackErrorCategory:playbackFailed?'playback':'none'};
   recordRadioQueueResult_(reason,result);return result;
 }
