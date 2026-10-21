@@ -1261,7 +1261,9 @@ async function requestRadioItems(reason,extraParams={}){
       window.__signageRadioTtsDiagnostics = [];
       window.__signageRadioPlaybackEvents = [];
       renderCanaryTtsDiagnostics_();
-      return requestRadioItems('home');
+      // Canary-only replay through the ordinary clock-menu player.
+      const morningReplay=new URL(location.href).searchParams.get('radioProgram')==='morning';
+      return requestRadioItems(morningReplay?'clock_0720':'home');
     }
 
     async function requestCastIfNeeded_(reason){
