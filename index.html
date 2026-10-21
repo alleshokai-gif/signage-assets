@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.22.0852"></script>
+  <script src="assets/version.js?v=2026.10.22.0857"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1183,7 +1183,7 @@ async function playTtsBase64(base64,onEvent){
         const finish = event => {
           if (settled) return;
           settled = true;
-          audio.onplay=null;
+          audio.onplaying=null;
           notify(event);
           audio.onended = null;
           audio.onerror = null;
@@ -1191,7 +1191,7 @@ async function playTtsBase64(base64,onEvent){
         };
 
         // Install handlers before play() so a fast event cannot strand the queue.
-        audio.onplay=()=>{if(!started){started=true;notify('play-start');}};
+        audio.onplaying=()=>{if(!started){started=true;notify('play-start');}};
         audio.onended = () => finish('ended');
         audio.onerror = () => finish('error');
 
@@ -1238,13 +1238,13 @@ async function playTtsBase64(base64,onEvent){
           if(settled)return;
           settled=true;
           notify(event,errorClass);
-          audio.onplay=audio.onloadeddata=audio.onended=audio.onerror=null;
+          audio.onplaying=audio.onloadeddata=audio.onended=audio.onerror=null;
           try{audio.pause();audio.removeAttribute('src');audio.load();}catch(_){}
           URL.revokeObjectURL(objectUrl);
           resolve(event);
         };
         audio.onloadeddata=()=>{if(!ready){ready=true;notify('decode-ready');}};
-        audio.onplay=()=>{if(!started){started=true;notify('play-start');}};
+        audio.onplaying=()=>{if(!started){started=true;notify('play-start');}};
         audio.onended=()=>finish('ended');
         audio.onerror=()=>{
           const code=audio.error?.code;
@@ -1269,13 +1269,13 @@ async function playTtsBase64(base64,onEvent){
     const finish = outcome => {
       if (settled) return;
       settled = true;
-      a.onplay=null;
+      a.onplaying=null;
       notify(outcome);
       a.onended = null;
       a.onerror = null;
       resolve(outcome);
     };
-    a.onplay=()=>{if(!started){started=true;notify('play-start');}};
+    a.onplaying=()=>{if(!started){started=true;notify('play-start');}};
     a.onended = () => finish('ended');
     a.onerror = () => finish('error');
     try {

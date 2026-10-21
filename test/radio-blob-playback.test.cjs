@@ -17,8 +17,8 @@ function host(fail=false){
     play(){
       queueMicrotask(()=>{
         this.onloadeddata?.();
-        if(fail){this.error={code:3};this.onerror?.();}
-        else{this.onplay?.();this.onended?.();}
+        if(fail){this.onplay?.();this.error={code:3};this.onerror?.();}
+        else{this.onplaying?.();this.onended?.();}
       });
       return Promise.resolve();
     }
@@ -46,6 +46,7 @@ test('decode and malformed payload failures remain distinct and release resource
   const h=host(true);
   assert.equal(await h.play(Buffer.alloc(80,42).toString('base64')),'decode-error');
   assert(h.events.some(x=>x[0]==='decode-error'&&x[1]==='decode'));
+  assert.equal(h.events.some(x=>x[0]==='play-start'),false);
   assert.deepEqual(h.revoked,['blob:synthetic']);
   assert.equal(await h.play('invalid!'),'format-error');
   assert(h.events.some(x=>x[0]==='format-error'&&x[1]==='format'));
