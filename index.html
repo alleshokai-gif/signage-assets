@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.21.1413"></script>
+  <script src="assets/version.js?v=2026.10.22.0737"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1116,7 +1116,7 @@ function radioDiagStoredEvent_(e){
 function radioDiagCleanRecord_(x){
  if(!x||typeof x!=="object"||Array.isArray(x)||typeof x.requestId!=="string"||!/^[a-z0-9-]{8,48}$/.test(x.requestId))return null;
  const n=v=>Number.isSafeInteger(v)&&v>=0&&v<=32?v:0,ms=v=>Number.isSafeInteger(v)&&v>=0&&v<=86400000?v:0,ts=v=>Number.isSafeInteger(v)&&v>0&&v<Date.now()+86400000?v:Date.now();
- const outcomes=["pending","private_success","private_empty","invalid_response","api_rejected","queue_invalid","request_failure","timeout","unknown"],errors=["none","auth","cache-reference","rate-limited","timeout","server","http","network","request","unknown"];
+ const outcomes=["pending","private_success","private_empty","invalid_response","api_rejected","queue_invalid","request_failure","timeout","authorization_rejected","parse_failure","http_failure","transport_failure","client_unavailable","unknown"],errors=["none","auth","cache-reference","rate-limited","timeout","server","http","network","request","unknown"];
  return{requestId:x.requestId,reason:RADIO_DIAG_ALLOWED_REASONS_.includes(x.reason)?x.reason:"unknown",
   stage:["started","queue_received","playing","timeout","finished"].includes(x.stage)?x.stage:"started",startedAtMs:ts(x.startedAtMs),updatedAtMs:ts(x.updatedAtMs),observerTimedOut:x.observerTimedOut===true,
   requestOutcome:outcomes.includes(x.requestOutcome)?x.requestOutcome:"unknown",source:["private","fixed fallback","unknown"].includes(x.source)?x.source:"unknown",
@@ -2053,7 +2053,7 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
       return `${y}-${m}-${day}`;
     }
 
-    let __lastHM = '';
+    let __clockInFlight = false;
 
     async function tickClockVoice(){
       const now = new Date();
@@ -2068,9 +2068,6 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
       }
 
       // ★同じ分は1回だけ（同一ループ内の多重呼び出し対策）
-      if (hm === __lastHM) return;
-      __lastHM = hm;
-
       console.log('[tickClockVoice]', { now: now.toString(), hm });
 
       // ★対象時刻以外は無視
@@ -2092,6 +2089,10 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
       const reason = reasonByHm_(hm);
       const isWeekstart0740 = reason === 'clock_0740';
 
+      if (__clockInFlight) return;
+      const previousAttempt = Number(localStorage.getItem(attemptKey) || 0);
+      if (previousAttempt > 0 && Date.now() - previousAttempt < 15000) return;
+
       // ★同一日・同一時刻は1回だけ（端末の再読込や二重起動対策）
       if (isWeekstart0740 && localStorage.getItem(playedKey)) {
         console.log('[tickClockVoice] skipped by played localStorage', playedKey);
@@ -2102,36 +2103,44 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
         return;
       }
 
-      // ★先に書く（発火前にガードを立てる）
-      if (isWeekstart0740) {
-        localStorage.setItem(attemptKey, String(Date.now()));
-      } else {
-        localStorage.setItem(key, '1');
-      }
-      localStorage.setItem('CLOCK_LAST_FIRE_MS', String(Date.now()));
-
-      // ★ここが重要：hmに応じたreasonを投げる
       const castOnlyReasons = ['cast_wakeup', 'cast_sleep'];
 
-      // シャオミで鳴らすやつだけ通常radio
-      if (!castOnlyReasons.includes(reason)) {
-        const radioResult = await requestRadioItems(reason);
-        if (isWeekstart0740) {
-          if (radioResult?.played && radioResult.itemsLength > 0) {
-            localStorage.setItem(playedKey, String(Date.now()));
-          } else {
-            console.log('[WEEKSTART NOT PLAYED]', {
-              reason,
-              slot: radioResult?.slot,
-              itemsLength: radioResult?.itemsLength || 0,
-              skipReason: radioResult?.debug?.skipReason
-            });
-          }
-        }
+      // Cast has no radio playback result; preserve its one-shot behavior.
+      if (castOnlyReasons.includes(reason)) {
+        localStorage.setItem(key, '1');
+        localStorage.setItem('CLOCK_LAST_FIRE_MS', String(Date.now()));
+        requestCastIfNeeded_(reason);
+        return;
       }
 
-      // Cast対象は別処理
-      requestCastIfNeeded_(reason);
+      // A failed attempt with no playback can retry within this minute. Keep
+      // an in-memory guard so the five-second clock loop cannot overlap runs.
+      __clockInFlight = true;
+      localStorage.setItem(attemptKey, String(Date.now()));
+      try {
+        const playOnce = async () => {
+          // Another tab may have finished while this tab waited for the lock.
+          if (localStorage.getItem(key) || (isWeekstart0740 && localStorage.getItem(playedKey))) return;
+          const radioResult = await requestRadioItems(reason);
+          if (radioResult?.startedItemCount > 0) {
+            localStorage.setItem(key, '1');
+            localStorage.setItem('CLOCK_LAST_FIRE_MS', String(Date.now()));
+            if (isWeekstart0740) localStorage.setItem(playedKey, String(Date.now()));
+          } else {
+            console.warn('[clock radio not started]', {reason,
+              requestOutcome:radioResult?.requestOutcome || 'unknown',
+              source:radioResult?.source || 'unknown'});
+          }
+        };
+        if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+          await navigator.locks.request('signage.clock.' + day + '_' + hm,
+            {mode:'exclusive',ifAvailable:true}, async lock => { if (lock) await playOnce(); });
+        } else await playOnce();
+      } catch (_) {
+        console.warn('[clock radio failed before playback]', reason);
+      } finally {
+        __clockInFlight = false;
+      }
     }
 
     console.log('[BOOT] start clock loop', new Date().toString());
