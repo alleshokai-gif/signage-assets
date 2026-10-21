@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.21.1304"></script>
+  <script src="assets/version.js?v=2026.10.21.1413"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1256,6 +1256,16 @@ async function playTtsBase64(base64,onEvent){
 
     async function playRadioQueue(items,diagContext){
   const counts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
+  // Start authenticated MP3 reads while fixed WAVs are playing. Each promise
+  // settles to a value so an early network failure cannot reject unobserved.
+  const prefetched=new Map();
+  for(const item of items)if(item?.type==='mp3'){
+    const key=item.queueId+':'+item.index;
+    if(!prefetched.has(key))prefetched.set(key,
+      SignageBoundary.request(GAS_API_URL,
+        {action:'radioAudio',reason:item.reason,queueId:item.queueId,index:item.index})
+        .then(data=>({data}),error=>({error})));
+  }
   for(let itemPosition=0;itemPosition<items.length;itemPosition++){
     const it=items[itemPosition];
     const index=Number.isSafeInteger(it&&it.index)?it.index:itemPosition;
@@ -1279,8 +1289,9 @@ async function playTtsBase64(base64,onEvent){
       radioDiagEvent_(diagContext,{index,type:'mp3',event:'audio-request-start'});
       let audio;
       try{
-        audio=await SignageBoundary.request(GAS_API_URL,
-          {action:'radioAudio',reason:it.reason,queueId:it.queueId,index:it.index});
+        const fetched=await prefetched.get(it.queueId+':'+it.index);
+        if(fetched.error)throw fetched.error;
+        audio=fetched.data;
       }catch(err){
         radioDiagEvent_(diagContext,{index,type:'mp3',event:'audio-request-error',
           elapsedMs:radioDiagElapsed_(requestStarted),errorClass:radioDiagErrorClass_(err)});

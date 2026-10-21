@@ -12,11 +12,11 @@ for(const relative of ['../index.html','../wi59-canary/index.html']) {
       assert(start>=0 && end>start,a);
       return html.slice(start,end);
     };
-    const played=[],events=[];
+    const played=[],events=[];let requested=0;
     const context=vm.createContext({
       GAS_API_URL:'https://synthetic.invalid/exec',VOICE_BASE:'voice/',CLOCK_VOICE_BASE:'clock/',
-      SignageBoundary:{request:async(_url,p)=>({ok:true,audio:p.index===1?'valid':'invalid'})},
-      playWav:async key=>{played.push(key);return 'ended';},
+      SignageBoundary:{request:async(_url,p)=>{requested++;return {ok:true,audio:p.index===1?'valid':'invalid'};}},
+      playWav:async key=>{assert.equal(requested,1);played.push(key);return 'ended';},
       playTtsBase64:async value=>{played.push(value);return value==='valid'?'ended':'error';},
       playStoredMp3Base64:async value=>{played.push(value);return value==='valid';},
       playRadioUnavailableCue_:async()=>{played.push('cue');return true;},

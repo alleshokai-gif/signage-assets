@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.21.1304"></script>
+  <script src="assets/version.js?v=2026.10.21.1413"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1099,6 +1099,14 @@
 
     async function playRadioQueue(items){
       let missingAudio=0;
+      const prefetched=new Map();
+      for(const item of items)if(item?.type==='mp3'){
+        const key=item.queueId+':'+item.index;
+        if(!prefetched.has(key))prefetched.set(key,
+          SignageBoundary.request(GAS_API_URL,
+            {action:'radioAudio',reason:item.reason,queueId:item.queueId,index:item.index})
+            .then(data=>({data}),error=>({error})));
+      }
       for(const it of items){
 
 
@@ -1122,8 +1130,9 @@
         }
         if(it.type==='mp3'){
           try{
-            const audio=await SignageBoundary.request(GAS_API_URL,
-              {action:'radioAudio',reason:it.reason,queueId:it.queueId,index:it.index});
+            const fetched=await prefetched.get(it.queueId+':'+it.index);
+            if(fetched.error)throw fetched.error;
+            const audio=fetched.data;
             if(!audio?.ok||!audio.audio||!(await playStoredMp3Base64(audio.audio)))
               throw new Error('audio_unavailable');
           }catch(_){
