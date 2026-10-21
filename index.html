@@ -1103,7 +1103,7 @@ const RADIO_DIAG_STORAGE_KEY_="signage_radio_diagnostics_v1",RADIO_DIAG_RING_LIM
 function radioDiagRequestId_(){return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);}
 function radioDiagStoredEvent_(e){
  if(!e||typeof e!=="object"||Array.isArray(e))return null;
- const allow=["tts-request-start","tts-request-success","tts-request-error","audio-request-start","audio-request-success","audio-request-error","audio-missing","play-start","play-ended","play-error","play-rejected","play-threw"],type=e.type==="wav"?"wav":e.type==="tts"?"tts":e.type==="mp3"?"mp3":null;
+ const allow=["tts-request-start","tts-request-success","tts-request-error","audio-request-start","audio-request-success","audio-request-error","audio-missing","fallback-cue","play-start","play-ended","play-error","play-rejected","play-threw"],type=e.type==="wav"?"wav":e.type==="tts"?"tts":e.type==="mp3"?"mp3":null;
  if(!type||!allow.includes(e.event))return null;
  const r={index:Number.isSafeInteger(e.index)&&e.index>=0&&e.index<=32?e.index:null,type,event:e.event,atMs:Number.isSafeInteger(e.atMs)&&e.atMs>=0&&e.atMs<=86400000?e.atMs:0};
  if(Number.isSafeInteger(e.elapsedMs)&&e.elapsedMs>=0&&e.elapsedMs<=86400000)r.elapsedMs=e.elapsedMs;
@@ -1155,7 +1155,7 @@ function radioDiagRestore_(){const a=radioDiagLoadRing_();try{window.__signageRa
 radioDiagRestore_();
 function radioDiagEvent_(context,event){
   if(!context||!Array.isArray(context.events))return;
-   const allowedEvents=['tts-request-start','tts-request-success','tts-request-error','audio-request-start','audio-request-success','audio-request-error','audio-missing','play-start','play-ended','play-error','play-rejected','play-threw'];
+   const allowedEvents=['tts-request-start','tts-request-success','tts-request-error','audio-request-start','audio-request-success','audio-request-error','audio-missing','fallback-cue','play-start','play-ended','play-error','play-rejected','play-threw'];
   if(!allowedEvents.includes(event.event))return;
   const index=Number.isSafeInteger(event.index)&&event.index>=0&&event.index<=32?event.index:null;
    const type=event.type==='wav'?'wav':event.type==='tts'?'tts':event.type==='mp3'?'mp3':null;
@@ -1234,6 +1234,26 @@ async function playTtsBase64(base64,onEvent){
   });
 }
 
+    async function playRadioUnavailableCue_(){
+      let context;
+      try{
+        const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+        if(!AudioContextClass)return false;
+        context=new AudioContextClass();
+        await context.resume();
+        const oscillator=context.createOscillator();
+        const gain=context.createGain();
+        oscillator.frequency.value=660;
+        gain.gain.value=0.08;
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime+0.18);
+        await wait(220);
+        return true;
+      }catch(_){return false;}
+      finally{if(context)try{await context.close();}catch(_){}}
+    }
+
     async function playRadioQueue(items,diagContext){
   const counts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
   for(let itemPosition=0;itemPosition<items.length;itemPosition++){
@@ -1250,6 +1270,7 @@ async function playTtsBase64(base64,onEvent){
     }
     if(it.type==='missing_audio'){
       radioDiagEvent_(diagContext,{index,type:'mp3',event:'audio-missing'});
+      if(await playRadioUnavailableCue_())radioDiagEvent_(diagContext,{index,type:'mp3',event:'fallback-cue'});
       counts.ttsFailed++;
       continue;
     }
@@ -1263,19 +1284,24 @@ async function playTtsBase64(base64,onEvent){
       }catch(err){
         radioDiagEvent_(diagContext,{index,type:'mp3',event:'audio-request-error',
           elapsedMs:radioDiagElapsed_(requestStarted),errorClass:radioDiagErrorClass_(err)});
+        if(await playRadioUnavailableCue_())radioDiagEvent_(diagContext,{index,type:'mp3',event:'fallback-cue'});
         counts.ttsFailed++;
         continue;
       }
       if(!audio?.ok || !audio.audio){
         radioDiagEvent_(diagContext,{index,type:'mp3',event:'audio-request-error',
           elapsedMs:radioDiagElapsed_(requestStarted),errorClass:radioDiagErrorClass_(audio)});
+        if(await playRadioUnavailableCue_())radioDiagEvent_(diagContext,{index,type:'mp3',event:'fallback-cue'});
         counts.ttsFailed++;
         continue;
       }
       radioDiagEvent_(diagContext,{index,type:'mp3',event:'audio-request-success',
         elapsedMs:radioDiagElapsed_(requestStarted)});
       if(await playTtsBase64(audio.audio,onEvent)==='ended')counts.ttsComplete++;
-      else counts.ttsFailed++;
+      else{
+        counts.ttsFailed++;
+        if(await playRadioUnavailableCue_())radioDiagEvent_(diagContext,{index,type:'mp3',event:'fallback-cue'});
+      }
       await wait(180);
       continue;
     }

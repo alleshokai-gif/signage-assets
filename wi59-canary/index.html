@@ -1077,6 +1077,26 @@
       });
     }
 
+    async function playRadioUnavailableCue_(){
+      let context;
+      try{
+        const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+        if(!AudioContextClass)return false;
+        context=new AudioContextClass();
+        await context.resume();
+        const oscillator=context.createOscillator();
+        const gain=context.createGain();
+        oscillator.frequency.value=660;
+        gain.gain.value=0.08;
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime+0.18);
+        await wait(220);
+        return true;
+      }catch(_){return false;}
+      finally{if(context)try{await context.close();}catch(_){}}
+    }
+
     async function playRadioQueue(items){
       let missingAudio=0;
       for(const it of items){
@@ -1097,6 +1117,7 @@
         if(it.type==='missing_audio'){
           missingAudio++;
           console.warn('[radio audio unavailable]',{category:'preparation'});
+          await playRadioUnavailableCue_();
           continue;
         }
         if(it.type==='mp3'){
@@ -1108,6 +1129,7 @@
           }catch(_){
             missingAudio++;
             console.warn('[radio audio unavailable]',{category:'delivery'});
+            await playRadioUnavailableCue_();
           }
           await wait(180);
           continue;

@@ -19,6 +19,7 @@ for(const relative of ['../index.html','../wi59-canary/index.html']) {
       playWav:async key=>{played.push(key);return 'ended';},
       playTtsBase64:async value=>{played.push(value);return value==='valid'?'ended':'error';},
       playStoredMp3Base64:async value=>{played.push(value);return value==='valid';},
+      playRadioUnavailableCue_:async()=>{played.push('cue');return true;},
       wait:async()=>{},radioDiagNow_:()=>0,radioDiagElapsed_:()=>1,
       radioDiagEvent_:(_context,event)=>events.push(event.event),
       radioDiagErrorClass_:()=> 'request',console:{warn(){}},
@@ -31,12 +32,13 @@ for(const relative of ['../index.html','../wi59-canary/index.html']) {
     assert(queue.every(context.isRadioQueueItem_));
     vm.runInContext(from('async function playRadioQueue(items','    /**'),context);
     const result=await context.playRadioQueue(queue,{events:[]});
-    assert.deepEqual(played,['INTRO_WEATHER_TODAY','valid','CLOSE_MORNING']);
+    assert.deepEqual(played,['INTRO_WEATHER_TODAY','valid','cue','CLOSE_MORNING']);
     if(relative==='../index.html') {
       assert.equal(result.ttsComplete,1);
       assert.equal(result.ttsFailed,1);
       assert(events.includes('audio-request-success'));
       assert(events.includes('audio-missing'));
+      assert(events.includes('fallback-cue'));
     } else assert.equal(result.missingAudio,1);
   });
 }
