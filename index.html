@@ -2054,6 +2054,7 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
     }
 
     let __clockInFlight = false;
+    let __lastLoggedHM = '';
 
     async function tickClockVoice(){
       const now = new Date();
@@ -2068,7 +2069,10 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
       }
 
       // ★同じ分は1回だけ（同一ループ内の多重呼び出し対策）
-      console.log('[tickClockVoice]', { now: now.toString(), hm });
+      if (hm !== __lastLoggedHM) {
+        __lastLoggedHM = hm;
+        console.log('[tickClockVoice]', { now: now.toString(), hm });
+      }
 
       // ★対象時刻以外は無視
       if (!CLOCK_SPEAK_TIMES.includes(hm)) return;
