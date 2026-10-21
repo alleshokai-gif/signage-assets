@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.22.0839"></script>
+  <script src="assets/version.js?v=2026.10.22.0852"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1168,7 +1168,7 @@ function radioDiagEvent_(context,event){
   if(['not-used','succeeded','failed','unknown'].includes(event.fallbackOutcome))record.fallbackOutcome=event.fallbackOutcome;
   if(['none','auth','cache-reference','rate-limited','timeout','server','http','network','request','format','decode','policy','playback'].includes(event.errorClass))record.errorClass=event.errorClass;
   context.events.push(record);if(context.events.length>64)context.events.shift();radioDiagSnapshot_(context,context.observerTimedOut?"timeout":"playing");
-  try{if(typeof console.info==='function')console.info('[signage-radio-event]',record);}catch(_){}
+  try{if(typeof console.info==='function')console.info('[signage-radio-event]',JSON.stringify(record));}catch(_){}
 }
 function radioQueueErrorClass_(out){if(!out)return 'none';const error=out.error||(out.data&&out.data.ok!==true?out.data:null);return error?radioDiagErrorClass_(error):'none';}
 
@@ -1517,7 +1517,7 @@ function recordRadioQueueResult_(reason,result,diagContext){
   radioDiagPersist_(record);
   try{
     const sink=result.requestOutcome==='private_success'?console.info:console.warn;
-    if(typeof sink==='function')sink.call(console,'[RADIO QUEUE]',record);
+    if(typeof sink==='function')sink.call(console,'[RADIO QUEUE]',JSON.stringify(record));
   }catch(_){}
   radioDiagRenderRecord_(record);
 }
