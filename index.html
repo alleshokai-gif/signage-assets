@@ -1310,7 +1310,7 @@ function radioSafeSlot_(slot){return['night_prep','night_last','morning_short','
 
     function updateRadioQueue1830DiagnosticVisibility_(page) {
       if (!radioQueue1830DiagnosticPanel) return;
-      const show = page === 'home';
+      const show = false; // Keep radio diagnostics in localStorage/console, not on the production home UI.
       radioQueue1830DiagnosticPanel.hidden = !show;
       radioQueue1830DiagnosticPanel.setAttribute('aria-hidden', show ? 'false' : 'true');
     }
