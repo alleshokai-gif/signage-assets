@@ -614,7 +614,8 @@
  */
 (function(root) {
   'use strict';
-  function failure(code,category) { return Object.assign(new Error(code),{code,category}); }
+  function safeRadioErrorDiagnostic_(diagnostic){if(!diagnostic||typeof diagnostic!=='object'||Array.isArray(diagnostic))return null;const result={};if(['resolved','failed','unknown'].includes(diagnostic.cacheReferenceResult))result.cacheReferenceResult=diagnostic.cacheReferenceResult;return Object.keys(result).length?result:null;}
+  function failure(code,category,diagnostic){const error=Object.assign(new Error(code),{code,category});const safeDiagnostic=safeRadioErrorDiagnostic_(diagnostic);if(safeDiagnostic)error.diagnostic=safeDiagnostic;return error;}
   function privateUnavailable() { return Promise.reject(failure('SIGNAGE_AUTH_NOT_CONFIGURED','configuration')); }
   const KEY='signage.scoped-key.v1',PENDING='signage.timer-pending.v1';
   function validKey(value) { return typeof value==='string' && /^sg1_[A-Za-z0-9_-]{43,128}$/.test(value); }
@@ -674,7 +675,7 @@
       let data;
       try { data=await response.json(); } catch (_) { throw failure('SIGNAGE_RESPONSE_INVALID','parse'); }
       if (!data || typeof data!=='object' || typeof data.ok!=='boolean') throw failure('SIGNAGE_RESPONSE_INVALID','parse');
-      if (!data.ok) throw failure('SIGNAGE_REQUEST_REJECTED',data.category || 'application');
+      if (!data.ok) throw failure('SIGNAGE_REQUEST_REJECTED',data.category || 'application',data.diagnostic);
       // Retain the pending ID even after success: rapid clicks/reload must not
       // register twice. A deliberately new submission clears it explicitly.
       return data;
@@ -1073,25 +1074,71 @@
       return VOICE_BASE;
     }
 
-    async function playTtsBase64(base64){
-      console.log('[TTS DEBUG] playTtsBase64 called', {
-        hasAudio: !!base64,
-        audioLength: base64 ? String(base64).length : 0
-      });
+    function radioDiagNow_(){try{return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();}catch(_){return Date.now();}}
+function radioDiagElapsed_(start){const elapsed=Math.round(radioDiagNow_()-start);return Number.isSafeInteger(elapsed)&&elapsed>=0&&elapsed<=86400000?elapsed:0;}
+function radioDiagErrorClass_(error){
+  if(!error)return 'none';
+  const status=Number(error.status||error.statusCode||0);
+  const category=typeof error.category==='string'?error.category.toLowerCase():'';
+  const code=typeof error.code==='string'?error.code.toLowerCase():'';
+  const kind=category+' '+code;
+  if(status===401||status===403||/auth|unauthor|forbidden|credential|scope/.test(kind))return 'auth';
+  if(/cache|queue|reference/.test(kind))return 'cache-reference';
+  if(status===429||/rate.?limit/.test(kind))return 'rate-limited';
+  if(/timeout|timed.?out/.test(kind))return 'timeout';
+  if(status>=500)return 'server';
+  if(status>=400)return 'http';
+  if(/network|fetch|connection/.test(kind))return 'network';
+  return 'request';
+}
+function radioDiagProvider_(value){return value==='inworld'||value==='google'?value:'unknown';}
+function radioDiagCacheOutcome_(diagnostic,success){
+  if(success)return 'resolved';
+  const value=diagnostic&&diagnostic.cacheReferenceResult;
+  if(value==='resolved')return 'resolved';
+  if(value==='failed'||value==='miss')return 'failed';
+  return 'unknown';
+}
+function radioDiagEvent_(context,event){
+  if(!context||!Array.isArray(context.events))return;
+  const allowedEvents=['tts-request-start','tts-request-success','tts-request-error','play-start','play-ended','play-error','play-rejected','play-threw'];
+  if(!allowedEvents.includes(event.event))return;
+  const index=Number.isSafeInteger(event.index)&&event.index>=0&&event.index<=32?event.index:null;
+  const type=event.type==='wav'?'wav':event.type==='tts'?'tts':null;
+  if(index===null||!type)return;
+  const record={index,type,event:event.event,atMs:radioDiagElapsed_(context.startedAt)};
+  if(Number.isSafeInteger(event.elapsedMs)&&event.elapsedMs>=0)record.elapsedMs=event.elapsedMs;
+  if(['resolved','failed','unknown'].includes(event.cacheReferenceOutcome))record.cacheReferenceOutcome=event.cacheReferenceOutcome;
+  if(['inworld','google','unknown'].includes(event.selectedProvider))record.selectedProvider=event.selectedProvider;
+  if(['inworld','google','unknown'].includes(event.provider))record.provider=event.provider;
+  if(['not-used','succeeded','failed','unknown'].includes(event.fallbackOutcome))record.fallbackOutcome=event.fallbackOutcome;
+  if(['none','auth','cache-reference','rate-limited','timeout','server','http','network','request'].includes(event.errorClass))record.errorClass=event.errorClass;
+  context.events.push(record);
+  if(context.events.length>64)context.events.shift();
+  try{if(typeof console.info==='function')console.info('[signage-radio-event]',record);}catch(_){}
+}
+function radioQueueErrorClass_(out){if(!out)return 'none';const error=out.error||(out.data&&out.data.ok!==true?out.data:null);return error?radioDiagErrorClass_(error):'none';}
+
+async function playTtsBase64(base64,onEvent){
       const audio = new Audio("data:audio/mpeg;base64," + base64);
       audio.volume = 1.0;
 
       return new Promise(resolve=>{
         let settled = false;
+        let started=false;
+        const notify=event=>{try{onEvent&&onEvent(event);}catch(_){}};
         const finish = event => {
           if (settled) return;
           settled = true;
+          audio.onplay=null;
+          notify(event);
           audio.onended = null;
           audio.onerror = null;
           resolve(event);
         };
 
         // Install handlers before play() so a fast event cannot strand the queue.
+        audio.onplay=()=>{if(!started){started=true;notify('play-start');}};
         audio.onended = () => finish('ended');
         audio.onerror = () => finish('error');
 
@@ -1107,17 +1154,22 @@
     }
     async function ttsTest(){ setToast?.('個別音声テストは利用できません。ラジオ再生を使ってください。'); }
 
-    function playWav(key, base){
+    function playWav(key, base, onEvent){
   return new Promise(resolve=>{
     const a = new Audio(base + key + '.wav');
     let settled = false;
+    let started=false;
+    const notify=event=>{try{onEvent&&onEvent(event);}catch(_){}};
     const finish = outcome => {
       if (settled) return;
       settled = true;
+      a.onplay=null;
+      notify(outcome);
       a.onended = null;
       a.onerror = null;
       resolve(outcome);
     };
+    a.onplay=()=>{if(!started){started=true;notify('play-start');}};
     a.onended = () => finish('ended');
     a.onerror = () => finish('error');
     try {
@@ -1129,38 +1181,55 @@
   });
 }
 
-    async function playRadioQueue(items){
+    async function playRadioQueue(items,diagContext){
   const counts={wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
-  for(const it of items){
+  for(let itemPosition=0;itemPosition<items.length;itemPosition++){
+    const it=items[itemPosition];
+    const index=Number.isSafeInteger(it&&it.index)?it.index:itemPosition;
+    const itemStarted=radioDiagNow_();
+    const onEvent=event=>{const kind=event==='ended'?'play-ended':event==='error'?'play-error':event;radioDiagEvent_(diagContext,{index,type:it.type,event:kind,elapsedMs:radioDiagElapsed_(itemStarted)});};
     if(it.type==='wav'){
       const base=(it.base==='clock')?CLOCK_VOICE_BASE:(it.base)?it.base:VOICE_BASE;
-      if(await playWav(it.key,base)==='ended')counts.wavComplete++;
+      if(await playWav(it.key,base,onEvent)==='ended')counts.wavComplete++;
       else counts.wavFailed++;
       await wait(180);
       continue;
     }
     if(it.type==='tts'){
       let j;
+      const requestStarted=radioDiagNow_();
+      radioDiagEvent_(diagContext,{index,type:'tts',event:'tts-request-start'});
       try{
         j=await SignageBoundary.request(GAS_API_URL,{action:'radioTts',reason:it.reason,queueId:it.queueId,index:it.index});
       }catch(err){
-        console.warn('[private TTS unavailable]',{category:err?.category||'transport'});
+        const errorClass=radioDiagErrorClass_(err);
+        radioDiagEvent_(diagContext,{index,type:'tts',event:'tts-request-error',elapsedMs:radioDiagElapsed_(requestStarted),errorClass,cacheReferenceOutcome:radioDiagCacheOutcome_(err&&err.diagnostic,false)});
         counts.ttsFailed++;
         continue;
       }
       const d=j&&j.diagnostic;
+      let providerRecord=null;
       if(d&&d.buildMarker==='signage-inworld-canary-diag-20261019-a'){
         const ev=(v,a)=>a.includes(v)?v:null;
         const sn=v=>Number.isSafeInteger(v)&&v>=0?v:null;
         const rec={selectedProvider:ev(d.selectedProvider,['inworld','google']),provider:ev(d.provider,['inworld','google','none']),outcome:ev(d.outcome,['success','error']),resultCode:ev(d.resultCode,['inworld_success','google_fallback_success','google_failure']),fallback:ev(d.fallback,['none','stage_disabled','voice_unavailable','source_rejected','source_not_approved','config_invalid','text_tag_unsupported','request_limit','budget_limit','budget_unavailable','credential_invalid','transport_failed','http_failed','response_invalid','audio_missing','audio_invalid','provider_error']),speechCharacters:sn(d.speechCharacters),providerCharacters:sn(d.providerCharacters),inworldCharacters:sn(d.inworldCharacters),inworldMs:sn(d.inworldMs),googleMs:sn(d.googleMs),totalMs:sn(d.totalMs)};
         const old=Array.isArray(window.__signageRadioTtsDiagnostics)?window.__signageRadioTtsDiagnostics:[];
-        window.__signageRadioTtsDiagnostics=[...old,rec].slice(-8);
+        providerRecord={selectedProvider:rec.selectedProvider,provider:rec.provider,totalMs:rec.totalMs};
+        window.__signageRadioTtsDiagnostics=[...old,providerRecord].slice(-8);
       }
       if(j&&j.ok&&j.audio){
-        if(await playTtsBase64(j.audio)==='ended')counts.ttsComplete++;
+        const selectedProvider=radioDiagProvider_(providerRecord&&providerRecord.selectedProvider);
+        const provider=radioDiagProvider_(providerRecord&&providerRecord.provider);
+        const fallbackOutcome=selectedProvider==='inworld'&&provider==='google'?'succeeded':(selectedProvider==='unknown'||provider==='unknown')?'unknown':'not-used';
+        radioDiagEvent_(diagContext,{index,type:'tts',event:'tts-request-success',elapsedMs:radioDiagElapsed_(requestStarted),cacheReferenceOutcome:radioDiagCacheOutcome_(d,true),selectedProvider,provider,fallbackOutcome});
+        if(await playTtsBase64(j.audio,onEvent)==='ended')counts.ttsComplete++;
         else counts.ttsFailed++;
       }else{
-        console.warn('[private TTS invalid response]');
+        const selectedProvider=radioDiagProvider_(providerRecord&&providerRecord.selectedProvider);
+        const provider=radioDiagProvider_(providerRecord&&providerRecord.provider);
+        const fallbackOutcome=selectedProvider==='inworld'&&provider==='google'?'failed':(selectedProvider==='unknown'||provider==='unknown')?'unknown':'not-used';
+        radioDiagEvent_(diagContext,{index,type:'tts',event:'tts-request-error',elapsedMs:radioDiagElapsed_(requestStarted),cacheReferenceOutcome:radioDiagCacheOutcome_(d,false),selectedProvider,provider,fallbackOutcome,errorClass:radioDiagErrorClass_(j)});
+        console.warn('[tts-empty]');
         counts.ttsFailed++;
       }
       await wait(180);
@@ -1263,8 +1332,8 @@ function formatRadioQueuePlaybackSummary_(result){
 function recordRadioQueueResult_(reason,result){
   const allowed=['home','manual','boot','radio_test','clock_0655','clock_0720','clock_0740','clock_1830','clock_2100'];
   if(!allowed.includes(reason))return;
-  const keys=['fixedFallbackWavComplete','fixedFallbackWavFailed','fixedFallbackTtsComplete','fixedFallbackTtsFailed','privateWavComplete','privateWavFailed','privateTtsComplete','privateTtsFailed'];
-  const record={reason,slot:radioSafeSlot_(result.slot),requestOutcome:result.requestOutcome,privateAvailable:result.privateAvailable,source:result.source,itemCount:result.itemCount,ttsItemCount:result.ttsItemCount,fallbackItemCount:result.fallbackItemCount,playbackErrorCategory:result.playbackErrorCategory};
+  const keys=['fixedFallbackWavComplete','fixedFallbackWavFailed','fixedFallbackTtsComplete','fixedFallbackTtsFailed','privateWavComplete','privateWavFailed','privateTtsComplete','privateTtsFailed','queueRequestDurationMs','expectedItemCount','startedItemCount','completedItemCount','failedItemCount','cacheReferenceResolvedCount','cacheReferenceFailedCount','cacheReferenceUnknownCount','providerFallbackSuccessCount'];
+  const record={reason,slot:radioSafeSlot_(result.slot),requestOutcome:result.requestOutcome,privateAvailable:result.privateAvailable,source:result.source,itemCount:result.itemCount,ttsItemCount:result.ttsItemCount,fallbackItemCount:result.fallbackItemCount,playbackErrorCategory:result.playbackErrorCategory,queueErrorCategory:['none','auth','cache-reference','rate-limited','timeout','server','http','network','request'].includes(result.queueErrorCategory)?result.queueErrorCategory:'request',authErrorCategory:result.authErrorCategory==='auth'?'auth':'none',queueRequestDurationMs:result.queueRequestDurationMs,expectedItemCount:result.expectedItemCount,startedItemCount:result.startedItemCount,completedItemCount:result.completedItemCount,failedItemCount:result.failedItemCount,cacheReferenceResolvedCount:result.cacheReferenceResolvedCount,cacheReferenceFailedCount:result.cacheReferenceFailedCount,cacheReferenceUnknownCount:result.cacheReferenceUnknownCount,providerFallbackSuccessCount:result.providerFallbackSuccessCount,playbackEvents:Array.isArray(result.playbackEvents)?result.playbackEvents.slice(-64):[]};
   for(const key of keys)record[key]=Number.isSafeInteger(result[key])&&result[key]>=0?result[key]:0;
   try{
     const previous=Array.isArray(window.__signageRadioQueueDiagnostics)?window.__signageRadioQueueDiagnostics:[];
@@ -1280,6 +1349,8 @@ function recordRadioQueueResult_(reason,result){
   }
 }
 async function requestRadioItems(reason,extraParams={}){
+  const diagContext={startedAt:radioDiagNow_(),events:[]};
+  const queueStartedAt=diagContext.startedAt;
   const fallback=SignageBoundary.fixedRadioItems(reason);
   const pending=SignageBoundary.request(GAS_API_URL,{reason,...extraParams}).then(data=>({data}),error=>({error}));
   const first=fallback[0];
@@ -1289,9 +1360,10 @@ async function requestRadioItems(reason,extraParams={}){
 
   if(first){
     firstAttempted=true;
-    Object.assign(fallbackCounts,await playRadioQueue([first]));
+    Object.assign(fallbackCounts,await playRadioQueue([first],diagContext));
   }
   const out=await pending;
+  const queueRequestDurationMs=radioDiagElapsed_(queueStartedAt);
   const requestOutcome=radioQueueOutcome_(out);
   const privateQueueAvailable=requestOutcome==='private_success';
   const source=privateQueueAvailable?'private':'fixed fallback';
@@ -1299,13 +1371,23 @@ async function requestRadioItems(reason,extraParams={}){
   const items=Array.isArray(serverItems)?serverItems.slice():[];
   if(first&&items[0]?.type==='wav'&&items[0]?.key===first.key)items.shift();
 
-  const remainingCounts=items.length?await playRadioQueue(items):{wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
+  const remainingCounts=items.length?await playRadioQueue(items,diagContext):{wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
   const remainingGroup=privateQueueAvailable?privateCounts:fallbackCounts;
   remainingGroup.wavComplete+=remainingCounts.wavComplete;
   remainingGroup.wavFailed+=remainingCounts.wavFailed;
   remainingGroup.ttsComplete+=remainingCounts.ttsComplete;
   remainingGroup.ttsFailed+=remainingCounts.ttsFailed;
   const playbackFailed=fallbackCounts.wavFailed+fallbackCounts.ttsFailed+privateCounts.wavFailed+privateCounts.ttsFailed>0;
+  const expectedItemCount=(firstAttempted?1:0)+items.length;
+  const startedItemCount=diagContext.events.filter(e=>e.event==='play-start').length;
+  const completedItemCount=diagContext.events.filter(e=>e.event==='play-ended').length;
+  const failedItemCount=diagContext.events.filter(e=>['play-error','play-rejected','play-threw','tts-request-error'].includes(e.event)).length;
+  const cacheReferenceResolvedCount=diagContext.events.filter(e=>e.cacheReferenceOutcome==='resolved').length;
+  const cacheReferenceFailedCount=diagContext.events.filter(e=>e.cacheReferenceOutcome==='failed').length;
+  const cacheReferenceUnknownCount=diagContext.events.filter(e=>(e.event==='tts-request-success'||e.event==='tts-request-error')&&e.cacheReferenceOutcome==='unknown').length;
+  const providerFallbackSuccessCount=diagContext.events.filter(e=>e.fallbackOutcome==='succeeded').length;
+  const queueErrorCategory=radioQueueErrorClass_(out);
+  const authErrorCategory=queueErrorCategory==='auth'||diagContext.events.some(e=>e.errorClass==='auth')?'auth':'none';
 
   const result={
     ok:privateQueueAvailable&&!playbackFailed,
@@ -1318,7 +1400,7 @@ async function requestRadioItems(reason,extraParams={}){
     ttsItemCount:privateQueueAvailable?out.data.items.filter(item=>item.type==='tts').length:0,
     fallbackItemCount:fallback.length,
     slot:privateQueueAvailable?out.data.slot:'unknown',
-    playbackErrorCategory:playbackFailed?'playback':'none',
+    playbackErrorCategory:playbackFailed?'playback':'none',queueRequestDurationMs,expectedItemCount,startedItemCount,completedItemCount,failedItemCount,queueErrorCategory,authErrorCategory,cacheReferenceResolvedCount,cacheReferenceFailedCount,cacheReferenceUnknownCount,providerFallbackSuccessCount,playbackEvents:diagContext.events,
     fixedFallbackWavComplete:fallbackCounts.wavComplete,
     fixedFallbackWavFailed:fallbackCounts.wavFailed,
     fixedFallbackTtsComplete:fallbackCounts.ttsComplete,
@@ -2023,6 +2105,7 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
 </script>
 </body>
 </html>
+
 
 
 
