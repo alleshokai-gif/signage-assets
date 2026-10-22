@@ -2,7 +2,7 @@
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Signage 認証設定</title><style>body{font:20px system-ui;background:#102237;color:white;max-width:42rem;margin:2rem auto;padding:1rem}input,button,a{font:inherit;padding:.8rem;box-sizing:border-box}input{width:100%}button{margin:.6rem .2rem}a{color:#bce2ff}#status{min-height:3rem}#radioStatus{font-size:.85em;line-height:1.5;overflow-wrap:anywhere}</style></head>
 <body><h1>Signage 認証設定</h1><p>このブラウザーに保存された合鍵の状態を表示します。値は表示しません。</p>
-<p id="status" role="status"></p><p id="radioStatus" aria-label="直近のラジオ状態"></p>
+<p id="status" role="status"></p><p id="radioStatus" aria-label="直近のラジオ状態"></p><p id="radioAudioStatus" aria-label="直近の音声診断"></p>
 <section id="pairStart"><button id="pairBegin" type="button">この端末の設定を開始</button><p id="pairStatus" role="status"></p></section>
 <section id="pairAdmin" hidden><h2>端末の登録を承認</h2><p>端末の8文字のコードと一致する場合だけ承認してください。</p><button id="pairRefresh" type="button">承認待ちを更新</button><div id="pairRequests"></div></section>
 <details><summary>従来の合鍵入力</summary><form id="setup"><label for="credential">用途限定の合鍵</label><input id="credential" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" required>
@@ -21,6 +21,18 @@ try{
   const source=last?.source==='private'||last?.source==='fixed fallback'?last.source:'unknown';
   const error=allowedErrors.has(last?.queueErrorCategory)?last.queueErrorCategory:'unknown';
   document.getElementById('radioStatus').textContent=last?`直近のラジオ: ${outcome} / ${source} / キューエラー ${error} / ${Number.isSafeInteger(last.itemCount)?last.itemCount:0} 項目`:'ラジオの診断記録はありません。';
+  const events=Array.isArray(last?.playbackEvents)?last.playbackEvents:[];
+  const safeEvents=new Set(['audio-request-start','audio-request-success','audio-request-error','audio-missing','decode-ready','decode-error','format-error','play-start','play-ended','play-error','play-rejected','play-threw','fallback-cue']);
+  const safeClasses=new Set(['auth','cache-reference','rate-limited','timeout','server','http','network','request','format','decode','policy','playback']);
+  const byItem=new Map();
+  for(const event of events){
+    if(event?.type!=='mp3'||!Number.isSafeInteger(event.index)||event.index<0||event.index>32||!safeEvents.has(event.event))continue;
+    const item=byItem.get(event.index)||[];
+    item.push(event.event+(safeClasses.has(event.errorClass)?`(${event.errorClass})`:''));
+    byItem.set(event.index,item);
+  }
+  document.getElementById('radioAudioStatus').textContent=last?
+    `MP3診断: ${[...byItem].sort((a,b)=>a[0]-b[0]).map(([index,item])=>`${index}: ${item.join(' → ')}`).join(' / ')||'記録なし'} / 開始 ${Number.isSafeInteger(last.startedItemCount)?last.startedItemCount:0} / 終了 ${Number.isSafeInteger(last.completedItemCount)?last.completedItemCount:0} / 失敗 ${Number.isSafeInteger(last.failedItemCount)?last.failedItemCount:0}`:'';
 }catch(_){document.getElementById('radioStatus').textContent='ラジオの診断記録を読めません。';}
 document.getElementById('setup').onsubmit=e=>{e.preventDefault();try{SignageBoundary.saveCredential(input.value.trim());status.textContent='このブラウザーに保存しました。';}catch(_){status.textContent='保存できません。合鍵の形式、HTTPS、ブラウザーの保存設定を確認してください。';}finally{input.value='';}};
 document.getElementById('forget').onclick=()=>{try{SignageBoundary.removeCredential();status.textContent='このブラウザーの合鍵を削除しました。';}catch(_){status.textContent='ブラウザーの保存領域を利用できません。';}};
