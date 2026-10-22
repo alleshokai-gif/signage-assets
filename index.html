@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.22.0912"></script>
+  <script src="assets/version.js?v=2026.10.22.0924"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -930,14 +930,14 @@
     adminGearButton?.addEventListener('pointerdown', (e)=>{
       e.preventDefault();
       e.stopPropagation();
-      navigate('admin', { reason:'manual' });
+      location.assign(withVersionParam_('admin/index.html'));
     });
 
     window.addEventListener('message', (event)=>{
       if (event?.data?.type === 'SIGNAGE_CLOSE_IFRAME') {
         goHome({ reason:'iframe-message' });
       } else if (event?.data?.type === 'SIGNAGE_NAVIGATE_ADMIN') {
-        navigate('admin', { reason:'iframe-message' });
+        location.assign(withVersionParam_('admin/index.html'));
       }
     });
 
