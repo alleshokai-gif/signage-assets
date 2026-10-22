@@ -27,6 +27,26 @@
     try { root.localStorage.removeItem(KEY); }
     catch (_) { throw failure('SIGNAGE_STORAGE_UNAVAILABLE','storage'); }
   }
+  async function approvePairing(endpoint,requestId,publicKey) {
+    const credential=readCredential();
+    if (!/^[a-f0-9]{32}$/.test(requestId || '') ||
+        !/^[A-Za-z0-9_-]{300,800}$/.test(publicKey || '') || !root.crypto?.subtle)
+      throw failure('SIGNAGE_PAIR_INVALID','configuration');
+    try {
+      const raw=root.atob(publicKey.replace(/-/g,'+').replace(/_/g,'/'));
+      const bytes=Uint8Array.from(raw,ch=>ch.charCodeAt(0));
+      const key=await root.crypto.subtle.importKey('spki',bytes,
+        {name:'RSA-OAEP',hash:'SHA-256'},false,['encrypt']);
+      const encrypted=await root.crypto.subtle.encrypt({name:'RSA-OAEP'},key,
+        new TextEncoder().encode(credential));
+      const ciphertext=root.btoa(String.fromCharCode(...new Uint8Array(encrypted)))
+        .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+      return await request(endpoint,{action:'pairApprove',requestId,ciphertext});
+    } catch (error) {
+      if (error.category) throw error;
+      throw failure('SIGNAGE_PAIR_CRYPTO_FAILED','configuration');
+    }
+  }
   function timerOperation(parameters) {
     const names=['category','mode','date','time','durationMin','notify5min','target'];
     const signature=JSON.stringify(names.map(name=>String(parameters[name] ?? '')));
@@ -91,7 +111,7 @@
     try { root.localStorage.removeItem(PENDING); }
     catch (_) { throw failure('SIGNAGE_RETRY_STORAGE_UNAVAILABLE','storage'); }
   }
-  const api=Object.freeze({request,privateUnavailable,fixedRadioItems,saveCredential,removeCredential,newTimerSubmission,
+  const api=Object.freeze({request,privateUnavailable,fixedRadioItems,saveCredential,removeCredential,approvePairing,newTimerSubmission,
     credentialStatus:()=>{try {readCredential();return 'saved';}catch(e){return e.category==='storage'?'storage_unavailable':'not_configured';}}});
   if (typeof module==='object' && module.exports) module.exports=api;
   else root.SignageBoundary=api;

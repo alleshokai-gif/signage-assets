@@ -3,9 +3,11 @@
 <title>Signage 認証設定</title><style>body{font:20px system-ui;background:#102237;color:white;max-width:42rem;margin:2rem auto;padding:1rem}input,button,a{font:inherit;padding:.8rem;box-sizing:border-box}input{width:100%}button{margin:.6rem .2rem}a{color:#bce2ff}#status{min-height:3rem}#radioStatus{font-size:.85em;line-height:1.5;overflow-wrap:anywhere}</style></head>
 <body><h1>Signage 認証設定</h1><p>このブラウザーに保存された合鍵の状態を表示します。値は表示しません。</p>
 <p id="status" role="status"></p><p id="radioStatus" aria-label="直近のラジオ状態"></p>
-<form id="setup"><label for="credential">用途限定の合鍵</label><input id="credential" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" required>
-<button type="submit">このブラウザーに保存</button></form><button id="forget" type="button">このブラウザーの合鍵を削除</button>
-<p>合鍵をURLや共有画面に貼らないでください。</p><button id="back" type="button">通常表示へ戻る</button><script src="../assets/signage-boundary.js"></script>
+<section id="pairStart"><button id="pairBegin" type="button">この端末の設定を開始</button><p id="pairStatus" role="status"></p></section>
+<section id="pairAdmin" hidden><h2>端末の登録を承認</h2><p>端末の8文字のコードと一致する場合だけ承認してください。</p><button id="pairRefresh" type="button">承認待ちを更新</button><div id="pairRequests"></div></section>
+<details><summary>従来の合鍵入力</summary><form id="setup"><label for="credential">用途限定の合鍵</label><input id="credential" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" required>
+<button type="submit">このブラウザーに保存</button></form><button id="forget" type="button">このブラウザーの合鍵を削除</button></details>
+<p>合鍵をURLや共有画面に貼らないでください。</p><button id="back" type="button">通常表示へ戻る</button><script src="../assets/signage-boundary.js?v=2026.10.22.1132"></script>
 <script>
 const status=document.getElementById('status'),input=document.getElementById('credential');
 const messages={saved:'このブラウザーに保存済みです。',not_configured:'このブラウザーでは未設定です。',storage_unavailable:'このブラウザーでは保存を利用できません。'};
@@ -23,4 +25,4 @@ try{
 document.getElementById('setup').onsubmit=e=>{e.preventDefault();try{SignageBoundary.saveCredential(input.value.trim());status.textContent='このブラウザーに保存しました。';}catch(_){status.textContent='保存できません。合鍵の形式、HTTPS、ブラウザーの保存設定を確認してください。';}finally{input.value='';}};
 document.getElementById('forget').onclick=()=>{try{SignageBoundary.removeCredential();status.textContent='このブラウザーの合鍵を削除しました。';}catch(_){status.textContent='ブラウザーの保存領域を利用できません。';}};
 document.getElementById('back').onclick=()=>{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'SIGNAGE_CLOSE_IFRAME'},location.origin);else location.href='../../index.html';};
-</script></body></html>
+</script><script src="./pairing.js?v=2026.10.22.1132"></script></body></html>
