@@ -124,11 +124,12 @@
   </main>
 
   <script>
+    const pageVersion = new URL(location.href).searchParams.get('v');
     const SWITCHBOT_TEMP_LOG_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyWFFM9SES2XgwZrmK5mJojJEMhHi1Zjcq4RgmXROsKCRoZvoC_sTC90GK2rRbY-yed/exec";
     const FINANCE_DW_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby7ZFU10M8n-JFk3NGS-boRJ_KdJsMaFkm8BTkYmzvDDHilqZpzD2wp2cJyx0ZBZGQK/exec";
     const ADMIN_URLS = {
       alert: "./alert/index.html",
-      signageAuth: "../wi59-canary/setup/index.html",
+      signageAuth: "../wi59-canary/setup/index.html" + (pageVersion ? "?v=" + encodeURIComponent(pageVersion) : ""),
       infectionDashboard: "https://pharmacy-portal-private.alle-shokai.workers.dev/index.html",
       climateProfile: SWITCHBOT_TEMP_LOG_WEB_APP_URL + "?mode=climate",
       energyPortal: "./energy/index.html",
