@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.22.1200"></script>
+  <script src="assets/version.js?v=2026.10.22.1225"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -1675,8 +1675,14 @@ function bindLocalClock1830Test_(button,output,requestRadioItems){
     // Radio entry point moved off the HOME button.
     // The playback implementation remains in requestRadioItems/playRadioQueue above,
     // and this function is now connected from the clock/date voice menu.
+    function clockMenuRadioReason_(now){
+      const minutes=now.getHours()*60+now.getMinutes();
+      return minutes<18*60+30?'clock_0720':'home';
+    }
     async function requestHomeRadioFromClockMenu(){
-      return requestRadioItems('home');
+      const now=new Date(),reason=clockMenuRadioReason_(now);
+      if(reason==='clock_0720'&&now.getHours()>=12)setToast?.('本日朝の番組を再放送します。');
+      return requestRadioItems(reason);
     }
 
     
