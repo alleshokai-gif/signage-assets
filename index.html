@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.22.1225"></script>
+  <script src="assets/version.js?v=2026.10.22.1240"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -613,7 +613,7 @@
  */
 (function(root) {
   'use strict';
-  function safeRadioErrorDiagnostic_(diagnostic){if(!diagnostic||typeof diagnostic!=='object'||Array.isArray(diagnostic))return null;const result={};if(['resolved','failed','unknown'].includes(diagnostic.cacheReferenceResult))result.cacheReferenceResult=diagnostic.cacheReferenceResult;return Object.keys(result).length?result:null;}
+  function safeRadioErrorDiagnostic_(diagnostic){if(!diagnostic||typeof diagnostic!=='object'||Array.isArray(diagnostic))return null;const result={};if(['resolved','failed','unknown'].includes(diagnostic.cacheReferenceResult))result.cacheReferenceResult=diagnostic.cacheReferenceResult;for(const key of ['responseFormat','responseHost']){const allowed=key==='responseFormat'?['json','html','text','other','unknown']:['apps_script','content','accounts','other','unknown'];if(allowed.includes(diagnostic[key]))result[key]=diagnostic[key];}if(Number.isInteger(diagnostic.responseStatus)&&diagnostic.responseStatus>=100&&diagnostic.responseStatus<=599)result.responseStatus=diagnostic.responseStatus;if(typeof diagnostic.responseRedirected==='boolean')result.responseRedirected=diagnostic.responseRedirected;return Object.keys(result).length?result:null;}
   function failure(code,category,diagnostic){const error=Object.assign(new Error(code),{code,category});const safeDiagnostic=safeRadioErrorDiagnostic_(diagnostic);if(safeDiagnostic)error.diagnostic=safeDiagnostic;return error;}
   function privateUnavailable() { return Promise.reject(failure('SIGNAGE_AUTH_NOT_CONFIGURED','configuration')); }
   const KEY='signage.scoped-key.v1',PENDING='signage.timer-pending.v1';
@@ -672,7 +672,11 @@
         credentials:'omit',cache:'no-store',signal:controller.signal});
       if (!response.ok) throw failure('SIGNAGE_TRANSPORT_FAILED','transport');
       let data;
-      try { data=await response.json(); } catch (_) { throw failure('SIGNAGE_RESPONSE_INVALID','parse'); }
+      try { data=await response.json(); } catch (_) {
+        const mime=String(response.headers?.get?.('content-type')||'').split(';')[0].trim().toLowerCase();
+        let host='unknown';try{const name=new URL(response.url).hostname;host=name==='script.google.com'?'apps_script':name==='script.googleusercontent.com'?'content':name==='accounts.google.com'?'accounts':'other';}catch(_){}
+        throw failure('SIGNAGE_RESPONSE_INVALID','parse',{responseFormat:mime==='application/json'?'json':mime==='text/html'?'html':mime==='text/plain'?'text':mime?'other':'unknown',responseHost:host,responseStatus:response.status,responseRedirected:response.redirected===true});
+      }
       if (!data || typeof data!=='object' || typeof data.ok!=='boolean') throw failure('SIGNAGE_RESPONSE_INVALID','parse');
       if (!data.ok) throw failure('SIGNAGE_REQUEST_REJECTED',data.category || 'application',data.diagnostic);
       // Retain the pending ID even after success: rapid clicks/reload must not
@@ -1122,6 +1126,7 @@ function radioDiagCleanRecord_(x){
   requestOutcome:outcomes.includes(x.requestOutcome)?x.requestOutcome:"unknown",source:["private","fixed fallback","unknown"].includes(x.source)?x.source:"unknown",
   slot:["morning_full","night_prep","unknown"].includes(x.slot)?x.slot:"unknown",itemCount:n(x.itemCount),ttsItemCount:n(x.ttsItemCount),fallbackItemCount:n(x.fallbackItemCount),queueRequestDurationMs:ms(x.queueRequestDurationMs),
   queueErrorCategory:errors.includes(x.queueErrorCategory)?x.queueErrorCategory:"unknown",authErrorCategory:["auth","none","unknown"].includes(x.authErrorCategory)?x.authErrorCategory:"unknown",
+  responseFormat:["json","html","text","other","unknown"].includes(x.responseFormat)?x.responseFormat:"unknown",responseHost:["apps_script","content","accounts","other","unknown"].includes(x.responseHost)?x.responseHost:"unknown",responseStatus:Number.isInteger(x.responseStatus)&&x.responseStatus>=100&&x.responseStatus<=599?x.responseStatus:0,responseRedirected:x.responseRedirected===true,
    playbackErrorCategory:["none","playback","playback_failed","playback-failed","unknown"].includes(x.playbackErrorCategory)?x.playbackErrorCategory:"unknown",
   expectedItemCount:n(x.expectedItemCount),startedItemCount:n(x.startedItemCount),completedItemCount:n(x.completedItemCount),failedItemCount:n(x.failedItemCount),
   cacheReferenceResolvedCount:n(x.cacheReferenceResolvedCount),cacheReferenceFailedCount:n(x.cacheReferenceFailedCount),cacheReferenceUnknownCount:n(x.cacheReferenceUnknownCount),providerFallbackSuccessCount:n(x.providerFallbackSuccessCount),
@@ -1147,7 +1152,7 @@ function radioDiagSnapshot_(c,stage){
  const resolved=e.filter(x=>x&&x.cacheReferenceOutcome==="resolved").length,failed=e.filter(x=>x&&x.cacheReferenceOutcome==="failed").length,tts=n("tts-request-start");
  return radioDiagPersist_({requestId:c.requestId,reason:c.reason,stage:c.observerTimedOut?"timeout":stage,startedAtMs:c.startedAtEpochMs,updatedAtMs:Date.now(),observerTimedOut:c.observerTimedOut===true,
   requestOutcome:c.requestOutcome||"pending",source:c.source||"unknown",slot:c.slot||"unknown",itemCount:c.itemCount||0,ttsItemCount:c.ttsItemCount||0,fallbackItemCount:c.fallbackItemCount||0,
-  queueRequestDurationMs:c.requestOutcome==="pending"?radioDiagElapsed_(c.startedAt):c.queueRequestDurationMs,queueErrorCategory:c.queueErrorCategory||"none",authErrorCategory:c.authErrorCategory||"none",playbackErrorCategory:c.playbackErrorCategory||"none",
+  queueRequestDurationMs:c.requestOutcome==="pending"?radioDiagElapsed_(c.startedAt):c.queueRequestDurationMs,queueErrorCategory:c.queueErrorCategory||"none",authErrorCategory:c.authErrorCategory||"none",playbackErrorCategory:c.playbackErrorCategory||"none",responseFormat:c.responseInfo?.responseFormat,responseHost:c.responseInfo?.responseHost,responseStatus:c.responseInfo?.responseStatus,responseRedirected:c.responseInfo?.responseRedirected,
   expectedItemCount:c.expectedItemCount||0,startedItemCount:n("play-start"),completedItemCount:n("play-ended"),failedItemCount:["format-error","decode-error","play-error","play-rejected","play-threw","tts-request-error","audio-request-error","audio-missing"].reduce((a,k)=>a+n(k),0),
   cacheReferenceResolvedCount:resolved,cacheReferenceFailedCount:failed,cacheReferenceUnknownCount:Math.max(0,tts-resolved-failed),providerFallbackSuccessCount:e.filter(x=>x&&x.fallbackOutcome==="succeeded").length,playbackEvents:e});
 }
@@ -1512,7 +1517,7 @@ function recordRadioQueueResult_(reason,result,diagContext){
   const allowed=RADIO_DIAG_ALLOWED_REASONS_;
   if(!allowed.includes(reason))return;
   const keys=['fixedFallbackWavComplete','fixedFallbackWavFailed','fixedFallbackTtsComplete','fixedFallbackTtsFailed','privateWavComplete','privateWavFailed','privateTtsComplete','privateTtsFailed','queueRequestDurationMs','expectedItemCount','startedItemCount','completedItemCount','failedItemCount','cacheReferenceResolvedCount','cacheReferenceFailedCount','cacheReferenceUnknownCount','providerFallbackSuccessCount'];
-  const record={requestId:diagContext&&diagContext.requestId,stage:"finished",startedAtMs:diagContext&&diagContext.startedAtEpochMs,updatedAtMs:Date.now(),observerTimedOut:diagContext&&diagContext.observerTimedOut===true,reason,slot:radioSafeSlot_(result.slot),requestOutcome:result.requestOutcome,privateAvailable:result.privateAvailable,source:result.source,itemCount:result.itemCount,ttsItemCount:result.ttsItemCount,fallbackItemCount:result.fallbackItemCount,playbackErrorCategory:result.playbackErrorCategory,queueErrorCategory:['none','auth','cache-reference','rate-limited','timeout','server','http','network','request'].includes(result.queueErrorCategory)?result.queueErrorCategory:'request',authErrorCategory:result.authErrorCategory==='auth'?'auth':'none',queueRequestDurationMs:result.queueRequestDurationMs,expectedItemCount:result.expectedItemCount,startedItemCount:result.startedItemCount,completedItemCount:result.completedItemCount,failedItemCount:result.failedItemCount,cacheReferenceResolvedCount:result.cacheReferenceResolvedCount,cacheReferenceFailedCount:result.cacheReferenceFailedCount,cacheReferenceUnknownCount:result.cacheReferenceUnknownCount,providerFallbackSuccessCount:result.providerFallbackSuccessCount,playbackEvents:Array.isArray(result.playbackEvents)?result.playbackEvents.slice(-64):[]};
+  const record={requestId:diagContext&&diagContext.requestId,stage:"finished",startedAtMs:diagContext&&diagContext.startedAtEpochMs,updatedAtMs:Date.now(),observerTimedOut:diagContext&&diagContext.observerTimedOut===true,reason,slot:radioSafeSlot_(result.slot),requestOutcome:result.requestOutcome,privateAvailable:result.privateAvailable,source:result.source,itemCount:result.itemCount,ttsItemCount:result.ttsItemCount,fallbackItemCount:result.fallbackItemCount,playbackErrorCategory:result.playbackErrorCategory,queueErrorCategory:['none','auth','cache-reference','rate-limited','timeout','server','http','network','request'].includes(result.queueErrorCategory)?result.queueErrorCategory:'request',authErrorCategory:result.authErrorCategory==='auth'?'auth':'none',queueRequestDurationMs:result.queueRequestDurationMs,responseFormat:result.responseInfo?.responseFormat,responseHost:result.responseInfo?.responseHost,responseStatus:result.responseInfo?.responseStatus,responseRedirected:result.responseInfo?.responseRedirected,expectedItemCount:result.expectedItemCount,startedItemCount:result.startedItemCount,completedItemCount:result.completedItemCount,failedItemCount:result.failedItemCount,cacheReferenceResolvedCount:result.cacheReferenceResolvedCount,cacheReferenceFailedCount:result.cacheReferenceFailedCount,cacheReferenceUnknownCount:result.cacheReferenceUnknownCount,providerFallbackSuccessCount:result.providerFallbackSuccessCount,playbackEvents:Array.isArray(result.playbackEvents)?result.playbackEvents.slice(-64):[]};
   for(const key of keys)record[key]=Number.isSafeInteger(result[key])&&result[key]>=0?result[key]:0;
   radioDiagPersist_(record);
   try{
@@ -1551,7 +1556,7 @@ async function requestRadioItems(reason,extraParams={},onPlaybackStart){
  diagContext.requestOutcome=requestOutcome;diagContext.privateAvailable=privateQueueAvailable;diagContext.source=source;
  diagContext.itemCount=privateQueueAvailable?out.data.items.length:0;diagContext.ttsItemCount=privateQueueAvailable?out.data.items.filter(item=>['tts','mp3','missing_audio'].includes(item.type)).length:0;
  diagContext.fallbackItemCount=fallback.length;diagContext.slot=privateQueueAvailable?out.data.slot:"unknown";diagContext.queueRequestDurationMs=queueRequestDurationMs;
- diagContext.queueErrorCategory=radioQueueErrorClass_(out);diagContext.authErrorCategory=diagContext.queueErrorCategory==="auth"?"auth":"none";diagContext.expectedItemCount=expectedItemCount;
+ diagContext.queueErrorCategory=radioQueueErrorClass_(out);diagContext.authErrorCategory=diagContext.queueErrorCategory==="auth"?"auth":"none";diagContext.expectedItemCount=expectedItemCount;diagContext.responseInfo=out.error?.diagnostic||null;
  radioDiagSnapshot_(diagContext,"queue_received");
 
   const remainingCounts=items.length?await playRadioQueue(items,diagContext,onPlaybackStart):{wavComplete:0,wavFailed:0,ttsComplete:0,ttsFailed:0};
@@ -1583,7 +1588,7 @@ async function requestRadioItems(reason,extraParams={},onPlaybackStart){
     ttsItemCount:privateQueueAvailable?out.data.items.filter(item=>['tts','mp3','missing_audio'].includes(item.type)).length:0,
     fallbackItemCount:fallback.length,
     slot:privateQueueAvailable?out.data.slot:'unknown',
-    playbackErrorCategory:playbackFailed?'playback':'none',queueRequestDurationMs,expectedItemCount,startedItemCount,completedItemCount,failedItemCount,queueErrorCategory,authErrorCategory,cacheReferenceResolvedCount,cacheReferenceFailedCount,cacheReferenceUnknownCount,providerFallbackSuccessCount,playbackEvents:diagContext.events,
+    playbackErrorCategory:playbackFailed?'playback':'none',queueRequestDurationMs,responseInfo:diagContext.responseInfo,expectedItemCount,startedItemCount,completedItemCount,failedItemCount,queueErrorCategory,authErrorCategory,cacheReferenceResolvedCount,cacheReferenceFailedCount,cacheReferenceUnknownCount,providerFallbackSuccessCount,playbackEvents:diagContext.events,
     fixedFallbackWavComplete:fallbackCounts.wavComplete,
     fixedFallbackWavFailed:fallbackCounts.wavFailed,
     fixedFallbackTtsComplete:fallbackCounts.ttsComplete,
