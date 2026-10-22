@@ -1,15 +1,26 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Signage 合鍵設定</title><style>body{font:20px system-ui;background:#102237;color:white;max-width:42rem;margin:2rem auto;padding:1rem}input,button,a{font:inherit;padding:.8rem;box-sizing:border-box}input{width:100%}button{margin:.6rem .2rem}a{color:#bce2ff}#status{min-height:3rem}</style></head>
-<body><h1>用途限定合鍵の設定</h1><p>このブラウザで初回だけ保存します。私的カレンダー・既定ラジオ・共有タイマー用です。公開済みの旧トークンは使えません。</p>
-<p>保存できなくても通常画面と固定音声は利用できます。合鍵をURLや共有画面に貼らないでください。</p>
-<form id="setup"><label for="credential">別途受け取った用途限定合鍵</label><input id="credential" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" required>
-<button type="submit">このブラウザに保存</button></form><button id="forget" type="button">このブラウザの合鍵を削除</button>
-<p id="status" role="status"></p><a href="../index.html">通常表示へ</a><script src="../assets/signage-boundary.js"></script>
+<title>Signage 認証設定</title><style>body{font:20px system-ui;background:#102237;color:white;max-width:42rem;margin:2rem auto;padding:1rem}input,button,a{font:inherit;padding:.8rem;box-sizing:border-box}input{width:100%}button{margin:.6rem .2rem}a{color:#bce2ff}#status{min-height:3rem}#radioStatus{font-size:.85em;line-height:1.5;overflow-wrap:anywhere}</style></head>
+<body><h1>Signage 認証設定</h1><p>このブラウザーに保存された合鍵の状態を表示します。値は表示しません。</p>
+<p id="status" role="status"></p><p id="radioStatus" aria-label="直近のラジオ状態"></p>
+<form id="setup"><label for="credential">用途限定の合鍵</label><input id="credential" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" required>
+<button type="submit">このブラウザーに保存</button></form><button id="forget" type="button">このブラウザーの合鍵を削除</button>
+<p>合鍵をURLや共有画面に貼らないでください。</p><button id="back" type="button">通常表示へ戻る</button><script src="../assets/signage-boundary.js"></script>
 <script>
 const status=document.getElementById('status'),input=document.getElementById('credential');
-const messages={saved:'合鍵は保存されています。',not_configured:'合鍵は未設定です。',storage_unavailable:'このブラウザでは保存を利用できません。通常表示は継続できます。'};
-status.textContent=messages[SignageBoundary.credentialStatus()];
-document.getElementById('setup').onsubmit=e=>{e.preventDefault();try{SignageBoundary.saveCredential(input.value.trim());status.textContent='保存しました。通常表示へ戻ってください。';}catch(_){status.textContent='保存できません。合鍵の形式・HTTPS・ブラウザの保存設定を確認してください。';}finally{input.value='';}};
-document.getElementById('forget').onclick=()=>{try{SignageBoundary.removeCredential();status.textContent='このブラウザの合鍵を削除しました。';}catch(_){status.textContent='ブラウザの保存領域を利用できません。';}};
+const messages={saved:'このブラウザーに保存済みです。',not_configured:'このブラウザーでは未設定です。',storage_unavailable:'このブラウザーでは保存を利用できません。'};
+status.textContent=messages[SignageBoundary.credentialStatus()]||'保存状態を確認できません。';
+const allowedOutcomes=new Set(['private_success','private_empty','timeout','authorization_rejected','parse_failure','http_failure','transport_failure','client_unavailable','request_failure','invalid_response','api_rejected','queue_invalid']);
+const allowedErrors=new Set(['none','auth','cache-reference','rate-limited','timeout','server','http','network','request','format','decode','policy','playback']);
+try{
+  const records=JSON.parse(localStorage.getItem('signage_radio_diagnostics_v1')||'[]');
+  const last=Array.isArray(records)?records[records.length-1]:null;
+  const outcome=allowedOutcomes.has(last?.requestOutcome)?last.requestOutcome:'unknown';
+  const source=last?.source==='private'||last?.source==='fixed fallback'?last.source:'unknown';
+  const error=allowedErrors.has(last?.queueErrorCategory)?last.queueErrorCategory:'unknown';
+  document.getElementById('radioStatus').textContent=last?`直近のラジオ: ${outcome} / ${source} / キューエラー ${error} / ${Number.isSafeInteger(last.itemCount)?last.itemCount:0} 項目`:'ラジオの診断記録はありません。';
+}catch(_){document.getElementById('radioStatus').textContent='ラジオの診断記録を読めません。';}
+document.getElementById('setup').onsubmit=e=>{e.preventDefault();try{SignageBoundary.saveCredential(input.value.trim());status.textContent='このブラウザーに保存しました。';}catch(_){status.textContent='保存できません。合鍵の形式、HTTPS、ブラウザーの保存設定を確認してください。';}finally{input.value='';}};
+document.getElementById('forget').onclick=()=>{try{SignageBoundary.removeCredential();status.textContent='このブラウザーの合鍵を削除しました。';}catch(_){status.textContent='ブラウザーの保存領域を利用できません。';}};
+document.getElementById('back').onclick=()=>{if(window.parent&&window.parent!==window)window.parent.postMessage({type:'SIGNAGE_CLOSE_IFRAME'},location.origin);else location.href='../../index.html';};
 </script></body></html>
