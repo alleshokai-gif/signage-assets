@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Signage Portal</title>
-  <script src="assets/version.js?v=2026.10.22.1240"></script>
+  <script src="assets/version.js?v=2026.10.22.1300"></script>
   <script>
     (() => {
       const version = window.APP_VERSION || "dev";
@@ -665,14 +665,17 @@
       throw failure('SIGNAGE_ENDPOINT_NOT_CONFIGURED','configuration');
     const pending=parameters.action==='setAlert'?timerOperation(parameters):null;
     const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),parameters.action==='radioTts'?20000:10000);
+    const radioRead=parameters.action==='radioTts'||parameters.action==='radioAudio'||
+      (!parameters.action&&typeof parameters.reason==='string'&&parameters.reason!=='alert_check');
+    const timeout=setTimeout(()=>controller.abort(),radioRead?20000:10000);
     try {
       const response=await root.fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
         body:JSON.stringify({...parameters,...(pending?{operationId:pending.id}:{}),credential}),
         credentials:'omit',cache:'no-store',signal:controller.signal});
       if (!response.ok) throw failure('SIGNAGE_TRANSPORT_FAILED','transport');
       let data;
-      try { data=await response.json(); } catch (_) {
+      try { data=await response.json(); } catch (parseError) {
+        if(parseError?.name==='AbortError')throw parseError;
         const mime=String(response.headers?.get?.('content-type')||'').split(';')[0].trim().toLowerCase();
         let host='unknown';try{const name=new URL(response.url).hostname;host=name==='script.google.com'?'apps_script':name==='script.googleusercontent.com'?'content':name==='accounts.google.com'?'accounts':'other';}catch(_){}
         throw failure('SIGNAGE_RESPONSE_INVALID','parse',{responseFormat:mime==='application/json'?'json':mime==='text/html'?'html':mime==='text/plain'?'text':mime?'other':'unknown',responseHost:host,responseStatus:response.status,responseRedirected:response.redirected===true});
