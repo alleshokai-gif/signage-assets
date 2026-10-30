@@ -1,6 +1,6 @@
 window.APP = {
-  version: "2026.10.22.1300",
-  build: "20261022-1300"
+  version: "2026.10.31.0628",
+  build: "20261031-0628"
 };
 
 window.APP_VERSION = window.APP.version;
