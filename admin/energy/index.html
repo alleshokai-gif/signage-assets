@@ -149,10 +149,12 @@
   </main>
 
   <script>
+    const energyWorkbook = "https://docs.google.com/spreadsheets/d/1YtQ51e0sslKqxgoXnEU4--zz4UuYHkoZxYXASwfzavQ/edit";
     const ENERGY_URLS = {
       energyMonitorLooker: "https://datastudio.google.com/embed/reporting/4c3f690d-87ad-4ad1-b1f2-fac126a4a816/page/p_2o3y60glyd",
       energyAnalysisLooker: "TODO_URL_ENERGY_ANALYSIS_LOOKER",
-      energySpreadsheet: "TODO_URL_ENERGY_SPREADSHEET",
+      energySpreadsheet: energyWorkbook,
+      ecoCuteMonitor: `${energyWorkbook}#gid=1466702603`,
       utilityBillSpreadsheet: "TODO_URL_UTILITY_BILL_SPREADSHEET",
       energyGas: "TODO_URL_ENERGY_GAS"
     };
@@ -162,7 +164,8 @@
       { label:"電力モニターLooker ↗", url:ENERGY_URLS.energyMonitorLooker, desc:"Google 側で iframe が拒否された場合", mode:"external" },
       { label:"電力分析Looker", url:ENERGY_URLS.energyAnalysisLooker, desc:"同じ iframe 内で開く", mode:"iframe" },
       { label:"電力分析Looker ↗", url:ENERGY_URLS.energyAnalysisLooker, desc:"外部タブで開く", mode:"external" },
-      { label:"EnergyManagementスプレッドシート ↗", url:ENERGY_URLS.energySpreadsheet, desc:"Google Spreadsheet は外部リンク", mode:"external" },
+      { label:"エコキュート ↗", url:ENERGY_URLS.ecoCuteMonitor, desc:"残湯量・沸き上げ・電力消費・運転履歴", mode:"external" },
+      { label:"EnergyManagementスプレッドシート ↗", url:ENERGY_URLS.energySpreadsheet, desc:"Google スプレッドシートで開く", mode:"external" },
       { label:"Utility billスプレッドシート ↗", url:ENERGY_URLS.utilityBillSpreadsheet, desc:"Google Spreadsheet は外部リンク", mode:"external" },
       { label:"Apps Script / GAS ↗", url:ENERGY_URLS.energyGas, desc:"Apps Script エディタは外部リンク", mode:"external" }
     ];
